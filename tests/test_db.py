@@ -141,3 +141,34 @@ def test_cohorts_recompute_until_coverage_clears(conn, s):
     # still at 50%, recomputed at 20Z when coverage is full, and then fixed.
     assert meta["2026-09-30"]["hour"] == "2026-10-01T18Z"
     assert meta["2026-10-01"] == {"hour": "2026-10-01T20Z", "coverage": pytest.approx(1.0)}
+
+
+def _churn(conn, start, hours: int, addr="0xw00") -> None:
+    """A market maker on CRWV: buy then sell 2 minutes later, 20 times an hour."""
+    rows, tid = [], 1
+    for h in range(hours):
+        for k in range(20):
+            t = start + timedelta(hours=h, minutes=3 * k)
+            rows.append(("xyz:CRWV", tid, t, 30.0, 1.0, "B", addr, "0xother"))
+            rows.append(("xyz:CRWV", tid + 1, t + timedelta(minutes=2), 30.0, 1.0, "A", "0xother", addr))
+            tid += 2
+    with conn.cursor() as cur:
+        cur.executemany(
+            "insert into fills (coin, tid, time, px, sz, side, buyer, seller) values (%s,%s,%s,%s,%s,%s,%s,%s)", rows
+        )
+    conn.commit()
+
+
+def test_bots_need_a_day_of_fills(conn, s):
+    seed(conn, 22)
+    _churn(conn, T0, 21)  # 40 fills an hour over 21 hours: under a day observed at every hour
+    metrics.run(conn, s, render=False)
+    assert conn.execute("select count(*) n from address_days where is_bot").fetchone()["n"] == 0
+
+
+def test_market_maker_is_a_bot_and_not_a_whale(conn, s):
+    seed(conn, 22)
+    _churn(conn, T0 - timedelta(days=2), 70)  # 960 fills a day, 2-minute holds, watched for 2+ days
+    metrics.run(conn, s, render=False)
+    r = conn.execute("select is_bot, whale_rank from address_days where address = '0xw00' order by day desc").fetchone()
+    assert r["is_bot"] and r["whale_rank"] is None

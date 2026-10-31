@@ -15,6 +15,7 @@ cohorts:
   bot_fills_per_day: 200   # bots: more fills than this per day ...
   bot_median_hold_s: 600   # ... and a median hold under this many seconds
   bot_lookback_days: 7
+  bot_min_observed_days: 1  # no bot classification until the tape has watched fills this long
   crowding_top_n: 5
   # The whale set for an ET day is computed on the first metrics run whose
   # snapshot hour is at or after this ET hour, and used until the next one.

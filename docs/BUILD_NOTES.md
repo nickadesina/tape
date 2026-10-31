@@ -91,9 +91,20 @@ The info budget is 1,020 weight a minute (85% of 1,200). The sweep, market conte
 liquidation confirmations run at high priority. History and leaderboard seeding run at low priority and only while
 the bucket is above 30%, so they never delay the sweep.
 
-The first live run, starting from about 3,000 known addresses, worked through about 440 seed snapshots a minute.
+First live run (2026-10-31): the 19:00 UTC sweep had only the 19 addresses seen trading in the first minute,
+and 0.1% coverage. After seeding the leaderboard at $1M+ account value (2,854 addresses, about 440 snapshots a
+minute), the 20:00 sweep covered 996 address-dex pairs and 2,232 positions in 107 s with no errors, and complex
+coverage reached 28.6%. Every cohort net summed back to the imbalance (complex: whale −6.5%, mid +1.7%, small 0.0%
+against an imbalance of −4.8%). Seeding then continued at the $25k floor (18,009 addresses).
+
 First-fill history is the expensive part: each page of 2,000 fills costs 120 weight. It drains over hours in the
 background and is ordered by position size, so whales are dated first.
+
+## Bots need a day of fills
+
+Over the first 40 minutes, the bot rule (over 200 fills a day, median hold under 10 minutes) flagged 32 addresses.
+Over a window that short, any active trader both trades often and closes quickly. Bot classification now waits until
+the tape has watched fills for `bot_min_observed_days` (1). Until then, nobody is a bot.
 
 ## Not built, on purpose
 

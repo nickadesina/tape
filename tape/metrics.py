@@ -103,16 +103,24 @@ def compute_cohorts(
     start = hour - lookback
     first_ws = conn.execute("select min(time) as t from fills where source = 'ws'").fetchone()["t"]
     observed_from = max(start, first_ws) if first_ws else hour
-    days = max((hour - observed_from).total_seconds() / 86400, 1 / 24)
-    min_count = rules.bot_fills_per_day * days
-    cands = conn.execute(
-        """select addr, count(*) as n from (
+    days = (hour - observed_from).total_seconds() / 86400
+    # Fills per day and hold times are meaningless over a few hours: any active
+    # trader closes inside a short window. Until the tape has watched long
+    # enough, nobody is classed a bot.
+    min_days = float(s.t("cohorts", "bot_min_observed_days"))
+    min_count = rules.bot_fills_per_day * days if days >= min_days else float("inf")
+    cands = (
+        conn.execute(
+            """select addr, count(*) as n from (
              select buyer as addr from fills where time >= %(s)s and time < %(e)s and buyer is not null
              union all
              select seller from fills where time >= %(s)s and time < %(e)s and seller is not null) x
            group by addr having count(*) > %(m)s""",
-        {"s": observed_from, "e": hour, "m": min_count},
-    ).fetchall()
+            {"s": observed_from, "e": hour, "m": min_count},
+        ).fetchall()
+        if min_count != float("inf")
+        else []
+    )
     stats: dict[str, tuple[float, float | None, bool]] = {}
     for c in cands:
         a = c["addr"]
