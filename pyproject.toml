@@ -1,0 +1,34 @@
+[project]
+name = "tape"
+version = "0.1.0"
+description = "Positioning Tape: who is positioned which way in the AI complex on Hyperliquid"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.27",
+  "websockets>=13",
+  "psycopg[binary]>=3.2",
+  "matplotlib>=3.9",
+  "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+s3 = ["boto3>=1.34"]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[project.scripts]
+tape = "tape.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["tape*"]
+
+[tool.setuptools.package-data]
+tape = ["migrations/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

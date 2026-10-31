@@ -1,0 +1,91 @@
+# The AI complex: every Hyperliquid perp whose price is a bet on AI capex,
+# grouped into the legs people argue about.
+#
+# This file is the operator's classification, not the source of truth for what
+# is listed. The indexer reads perpDexs and meta at startup and on a schedule;
+# a market listed here that is missing or delisted on chain is dropped (and
+# logged), and every live market on these dexes that is not classified here is
+# printed by `tape universe` so a new listing gets a decision.
+#
+# Checked against live meta on 2026-10-31:
+#   - xyz lists NBIS and IREN (the design doc's open question): added to neoclouds.
+#   - Labs: xyz:ANT is the Anthropic pre-IPO perp; io:OAI and io:ANTH are
+#     EntropyIO's OpenAI and Anthropic. There is no xyz:OPENAI or xyz:ANTHROPIC.
+#   - xyz:H100 and io:H100 are delisted (0 OI). Listed under gpu_hour so the day
+#     either relists, it joins the tape without a code change.
+#   - io: also lists DRAM, SNDK, NVDA, NBIS. They are the same bets on a second
+#     venue, so they sit in the same legs.
+
+dexes: [xyz, io]
+
+legs:
+  neoclouds:
+    label: Neoclouds
+    markets: [xyz:CRWV, xyz:NBIS, xyz:IREN, io:NBIS]
+  memory_price:
+    label: Memory price
+    markets: [xyz:DRAM, io:DRAM]
+  memory_names:
+    label: Memory names
+    markets: [xyz:MU, xyz:SKHX, xyz:SKHY, xyz:SMSN, xyz:SNDK, xyz:CXMT, io:SNDK]
+  silicon:
+    label: Silicon
+    markets: [xyz:NVDA, xyz:AMD, xyz:INTC, io:NVDA]
+  etfs:
+    label: Compute ETFs
+    markets: [xyz:LYTE, xyz:NCLD]
+  labs:
+    label: Labs
+    markets: [xyz:ANT, io:OAI, io:ANTH]
+  gpu_hour:
+    label: GPU-hour
+    markets: [xyz:H100, io:H100]
+
+# Leg order on charts, top to bottom in the legend.
+leg_order: [neoclouds, memory_price, memory_names, silicon, etfs, labs, gpu_hour]
+
+# Candidates seen in live meta that fit the complex but are not in it yet.
+# `tape universe` prints these separately from wholly unclassified listings.
+# Move one into a leg above to add it; nothing else changes.
+candidates:
+  - xyz:KIOXIA   # NAND, memory names
+  - xyz:WDC      # storage, memory names
+  - xyz:MINIMAX  # Chinese lab, listed in HK
+  - xyz:ZHIPU    # Chinese lab, listed in HK
+  - xyz:SMH      # semis ETF
+  - xyz:SOXL     # 3x semis ETF, heavy volume
+  - xyz:AVGO
+  - xyz:MRVL
+  - xyz:ARM
+  - xyz:TSM
+  - xyz:ASML
+  - xyz:LITE
+  - xyz:AAOI
+
+# Names a post can use for a market. Used by `tape match` to attach the right
+# chart to a quote-ride alert. Matching is case-insensitive on word boundaries;
+# the bare ticker always matches too.
+aliases:
+  xyz:CRWV: [CoreWeave, $CRWV]
+  xyz:NBIS: [Nebius, $NBIS]
+  io:NBIS: [Nebius]
+  xyz:IREN: [IREN, Iris Energy]
+  xyz:DRAM: [DRAM, DRAM price, DRAM prices, memory prices, DDR5, HBM]
+  io:DRAM: [DRAM]
+  xyz:MU: [Micron, $MU]
+  xyz:SKHX: [SK Hynix, Hynix]
+  xyz:SKHY: [SK Hynix, Hynix]
+  xyz:SMSN: [Samsung, Samsung Electronics]
+  xyz:SNDK: [SanDisk, $SNDK]
+  io:SNDK: [SanDisk]
+  xyz:CXMT: [CXMT, ChangXin]
+  xyz:NVDA: [Nvidia, NVIDIA, $NVDA, Jensen]
+  io:NVDA: [Nvidia]
+  xyz:AMD: [AMD, $AMD, Lisa Su]
+  xyz:INTC: [Intel, $INTC]
+  xyz:LYTE: [LYTE]
+  xyz:NCLD: [NCLD]
+  xyz:ANT: [Anthropic, Claude]
+  io:ANTH: [Anthropic]
+  io:OAI: [OpenAI, ChatGPT, Sam Altman]
+  xyz:H100: [H100, GPU-hour, GPU rental]

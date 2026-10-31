@@ -1,0 +1,59 @@
+# Every threshold the tape uses. These are starting values (design doc,
+# "Thresholds are starting values and get tuned in the first two weeks"). The
+# metrics job publishes the values it ran with to the `definitions` table, and
+# the site's method page renders them from there, so changing a number here
+# changes the method page on the next hourly run. Record the change in
+# site/lib/changelog.ts as well.
+
+handle: "@zetsurui"
+timezone: America/New_York
+
+cohorts:
+  whale_count: 50          # top N addresses by gross notional across the complex, recomputed daily
+  mid_floor_usd: 25000     # gross notional at or above this is mid; below is small
+  fresh_days: 30           # first fill in the complex under this many days ago
+  bot_fills_per_day: 200   # bots: more fills than this per day ...
+  bot_median_hold_s: 600   # ... and a median hold under this many seconds
+  bot_lookback_days: 7
+  crowding_top_n: 5
+  # The whale set for an ET day is computed on the first metrics run whose
+  # snapshot hour is at or after this ET hour, and used until the next one.
+  recompute_hour_et: 15
+
+coverage:
+  post_min: 0.98           # a chart without this much coverage is not posted
+  # Below this the market's line is drawn dashed and its coverage printed.
+  dashed_below: 0.98
+
+daily:
+  # The daily post renders at 16:00 ET from the last complete sweep, which is
+  # the 15:00 ET snapshot (a sweep takes ~10 minutes). Daily series rows are
+  # written from this hour.
+  snapshot_hour_et: 15
+  window_days: 30
+
+events:
+  whale_flip_min_usd: 250000     # notional on the new side
+  whale_entry_min_usd: 500000    # non-whale opening this much on one market
+  whale_net_move: 0.05           # 24h change in whale net, share of OI
+  funding_hourly: 0.0005         # 0.05% per hour, either direction
+  premium_bps: 50
+  liquidation_share: 0.03        # of OI, in one hour
+  # Alerts are held for this many hours after the first sweep so the bootstrap
+  # (every position looks new) does not page the operator.
+  warmup_hours: 24
+
+indexer:
+  info_weight_per_minute: 1200   # Hyperliquid's published per-IP limit
+  budget_fraction: 0.85          # leave headroom for anything else on the box
+  low_priority_reserve: 0.30     # history/seed work only runs above this fraction of the bucket
+  inactive_days: 14              # no position and no fill for this long: drop from the sweep set
+  backfill_gap_s: 60             # WebSocket gaps longer than this are backfilled from userFillsByTime
+  sweep_offset_s: 20             # start each hourly sweep this long after the hour
+  liq_px_band: 0.01              # a reducing fill within 1% of the snapshot liquidation price is a liquidation candidate
+  universe_refresh_s: 21600
+
+render:
+  width_px: 1200
+  height_px: 675
+  hourly_retention_days: 30      # db chart store only; s3 keeps everything
