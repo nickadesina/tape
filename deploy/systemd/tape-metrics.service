@@ -1,0 +1,9 @@
+[Unit]
+Description=Positioning Tape metrics catch-up (any finished sweep without metrics)
+
+[Service]
+Type=oneshot
+User=tape
+WorkingDirectory=/opt/tape
+EnvironmentFile=/etc/tape/tape.env
+ExecStart=/opt/tape/.venv/bin/tape metrics

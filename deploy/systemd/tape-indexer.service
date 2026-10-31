@@ -1,0 +1,17 @@
+[Unit]
+Description=Positioning Tape indexer (WebSocket + hourly sweep)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=tape
+WorkingDirectory=/opt/tape
+EnvironmentFile=/etc/tape/tape.env
+ExecStart=/opt/tape/.venv/bin/tape index
+Restart=always
+RestartSec=10
+# The sweep launches the metrics job as a child; give it time to finish on stop.
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

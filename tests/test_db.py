@@ -16,8 +16,11 @@ DSN = os.environ.get("DATABASE_URL_TEST")
 pytestmark = pytest.mark.skipif(not DSN, reason="DATABASE_URL_TEST is unset")
 
 T0 = datetime(2026, 10, 1, 0, tzinfo=UTC)
-MARKETS = {"xyz:CRWV": ("xyz", "neoclouds", 30.0), "xyz:DRAM": ("xyz", "memory_price", 48.0),
-           "xyz:NVDA": ("xyz", "silicon", 200.0)}
+MARKETS = {
+    "xyz:CRWV": ("xyz", "neoclouds", 30.0),
+    "xyz:DRAM": ("xyz", "memory_price", 48.0),
+    "xyz:NVDA": ("xyz", "silicon", 200.0),
+}
 
 
 @pytest.fixture
@@ -46,13 +49,17 @@ def seed(conn, hours: int) -> None:
     whales = [f"0xw{i:02d}" for i in range(60)]
     smalls = [f"0xs{i:03d}" for i in range(400)]
     for a in whales + smalls:
-        conn.execute("insert into addresses (address, first_fill, first_fill_complete) values (%s, %s, true)",
-                     (a, T0 - timedelta(days=60 if a.startswith("0xw") else 5)))
+        conn.execute(
+            "insert into addresses (address, first_fill, first_fill_complete) values (%s, %s, true)",
+            (a, T0 - timedelta(days=60 if a.startswith("0xw") else 5)),
+        )
         conn.execute("insert into address_dexes (address, dex, first_swept_hour) values (%s, 'xyz', %s)", (a, T0))
     for h in range(hours):
         hour = T0 + timedelta(hours=h)
-        conn.execute("insert into sweeps (hour, started_at, finished_at) values (%s, %s, %s)",
-                     (hour, hour, hour + timedelta(minutes=10)))
+        conn.execute(
+            "insert into sweeps (hour, started_at, finished_at) values (%s, %s, %s)",
+            (hour, hour, hour + timedelta(minutes=10)),
+        )
         for coin, (_, _, mark) in MARKETS.items():
             # Whales drift from long to short CRWV over the window; small wallets take the other side.
             tilt = 1 - 2 * h / hours if coin == "xyz:CRWV" else 0.5
@@ -63,11 +70,15 @@ def seed(conn, hours: int) -> None:
             for sm in smalls:
                 rows.append((sm, -whale_total / len(smalls)))
             longs = sum(x for _, x in rows if x > 0)
-            conn.execute("insert into market_hours (coin, hour, oi, mark, oracle, funding) values (%s,%s,%s,%s,%s,%s)",
-                         (coin, hour, longs, mark, mark * 0.999, 0.00001))
+            conn.execute(
+                "insert into market_hours (coin, hour, oi, mark, oracle, funding) values (%s,%s,%s,%s,%s,%s)",
+                (coin, hour, longs, mark, mark * 0.999, 0.00001),
+            )
             with conn.cursor() as cur:
-                cur.executemany("insert into snapshots (hour, coin, address, size) values (%s,%s,%s,%s)",
-                                [(hour, coin, a, size) for a, size in rows if size])
+                cur.executemany(
+                    "insert into snapshots (hour, coin, address, size) values (%s,%s,%s,%s)",
+                    [(hour, coin, a, size) for a, size in rows if size],
+                )
     conn.commit()
 
 
@@ -92,7 +103,9 @@ def test_metrics_charts_and_daily(conn, s):
     assert bytes(png[:8]) == b"\x89PNG\r\n\x1a\n"
     ev = {r["kind"] for r in conn.execute("select kind from events")}
     assert "whale_net_move" in ev and "whale_flip" in ev
-    tops = conn.execute("select count(*) n from top_positions where coin = 'xyz:CRWV' and hour = (select max(hour) from top_positions)").fetchone()["n"]
+    tops = conn.execute(
+        "select count(*) n from top_positions where coin = 'xyz:CRWV' and hour = (select max(hour) from top_positions)"
+    ).fetchone()["n"]
     assert tops == 50
     # The run is idempotent: nothing is pending, and recomputing an hour replaces its rows.
     assert metrics.run(conn, s) == []

@@ -48,16 +48,28 @@ def cmd_universe(a) -> None:
         for asset, c in zip(resp[0]["universe"], resp[1], strict=True):
             ctx[asset["name"]] = c
     if a.json:
-        print(json.dumps({"markets": {c: m.leg for c, m in u.markets.items()}, "missing": u.missing,
-                          "delisted": u.delisted, "candidates": u.candidates, "unclassified": u.unclassified}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "markets": {c: m.leg for c, m in u.markets.items()},
+                    "missing": u.missing,
+                    "delisted": u.delisted,
+                    "candidates": u.candidates,
+                    "unclassified": u.unclassified,
+                },
+                indent=2,
+            )
+        )
         return
     for leg in s.universe.leg_order:
         print(f"{s.universe.legs[leg].label}:")
         for c in u.leg_markets(leg):
             x = ctx[c]
             oi_usd = float(x["openInterest"]) * float(x["markPx"])
-            print(f"  {c:14s} max {u.markets[c].max_leverage:>2}x  OI ${oi_usd / 1e6:8.2f}M  "
-                  f"24h vol ${float(x['dayNtlVlm']) / 1e6:8.2f}M")
+            print(
+                f"  {c:14s} max {u.markets[c].max_leverage:>2}x  OI ${oi_usd / 1e6:8.2f}M  "
+                f"24h vol ${float(x['dayNtlVlm']) / 1e6:8.2f}M"
+            )
     print("missing on chain:", u.missing or "none")
     print("delisted:", u.delisted or "none")
     print("candidates (live, not in a leg):", u.candidates or "none")
@@ -146,8 +158,10 @@ def cmd_seed(a) -> None:
             [(x, d) for x in addrs for d in s.universe.dexes],
         )
         conn.commit()
-    print(f"queued {len(addrs)} leaderboard addresses (account value >= ${a.min_account_value:,.0f}) "
-          f"on {len(s.universe.dexes)} dexes; the indexer snapshots them at low priority")
+    print(
+        f"queued {len(addrs)} leaderboard addresses (account value >= ${a.min_account_value:,.0f}) "
+        f"on {len(s.universe.dexes)} dexes; the indexer snapshots them at low priority"
+    )
 
 
 def cmd_status(a) -> None:
@@ -159,19 +173,26 @@ def cmd_status(a) -> None:
         print("sweeps:")
         for r in q("select * from sweeps order by hour desc limit 5"):
             dur = (r["finished_at"] - r["started_at"]).total_seconds() if r["finished_at"] else None
-            print(f"  {r['hour']:%Y-%m-%d %H:%M}Z  {r['addresses'] or 0:>6} swept  {r['positions'] or 0:>6} positions  "
-                  f"{r['errors'] or 0} errors  {'%.0fs' % dur if dur else 'running'}")
+            print(
+                f"  {r['hour']:%Y-%m-%d %H:%M}Z  {r['addresses'] or 0:>6} swept  {r['positions'] or 0:>6} positions  "
+                f"{r['errors'] or 0} errors  {f'{dur:.0f}s' if dur else 'running'}"
+            )
         c = q("""select (select count(*) from addresses) a, (select count(*) from address_dexes where seed_pending) seeds,
                  (select count(*) from addresses where history_checked_at is null) hist,
                  (select count(*) from fills) fills, (select max(time) from fills) last_fill,
                  (select count(*) from events) events""")[0]
-        print(f"addresses {c['a']}  seed queue {c['seeds']}  history queue {c['hist']}  fills {c['fills']}  "
-              f"last fill {c['last_fill']}  events {c['events']}")
+        print(
+            f"addresses {c['a']}  seed queue {c['seeds']}  history queue {c['hist']}  fills {c['fills']}  "
+            f"last fill {c['last_fill']}  events {c['events']}"
+        )
         h = q("select max(hour) h from series")[0]["h"]
         if h:
             print(f"coverage at {h:%Y-%m-%d %H:%M}Z:")
-            for r in q("""select subject, value from series where hour = %s and metric = 'coverage'
-                          order by subject = 'complex' desc, subject like 'leg:%%' desc, subject""", h):
+            for r in q(
+                """select subject, value from series where hour = %s and metric = 'coverage'
+                          order by subject = 'complex' desc, subject like 'leg:%%' desc, subject""",
+                h,
+            ):
                 flag = "" if r["value"] >= float(s.t("coverage", "post_min")) else "  < post bar"
                 print(f"  {r['subject']:22s} {r['value'] * 100:6.1f}%{flag}")
         for r in q("select job, key, ok, note from runs order by started_at desc limit 6"):

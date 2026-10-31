@@ -1,0 +1,9 @@
+[Unit]
+Description=Send the daily chart at 16:00 ET, every day including weekends
+
+[Timer]
+OnCalendar=*-*-* 16:00:00 America/New_York
+Persistent=false
+
+[Install]
+WantedBy=timers.target

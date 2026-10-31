@@ -13,7 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 s3 = ["boto3>=1.34"]
-dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6"]
 
 [project.scripts]
 tape = "tape.cli:main"
@@ -32,3 +32,11 @@ tape = ["migrations/*.sql"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]  # the formatter wraps code; long SQL strings stay readable on one line

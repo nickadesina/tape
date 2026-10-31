@@ -81,4 +81,3 @@ def record_post(s: Settings, event_id: int, url: str) -> None:
         conn.commit()
     if not n:
         raise SystemExit(f"no event {event_id}")
-

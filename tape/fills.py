@@ -89,7 +89,7 @@ def liquidated_user(f: dict[str, Any]) -> str | None:
 @dataclass(frozen=True)
 class FirstFill:
     first_fill_ms: int | None  # earliest fill in the complex found
-    complete: bool             # the history reached the address's first fill ever
+    complete: bool  # the history reached the address's first fill ever
 
 
 def estimate_first_fill(pages: list[list[dict[str, Any]]], coins: set[str], page_size: int = 2000) -> FirstFill:

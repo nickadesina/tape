@@ -1,0 +1,9 @@
+[Unit]
+Description=Run the metrics catch-up at :02 past every hour
+
+[Timer]
+OnCalendar=*-*-* *:02:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

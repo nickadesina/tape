@@ -24,9 +24,9 @@ class Market:
 @dataclass
 class Universe:
     markets: dict[str, Market]
-    missing: list[str] = field(default_factory=list)       # configured, not listed on chain
-    delisted: list[str] = field(default_factory=list)      # configured, listed but delisted
-    candidates: list[str] = field(default_factory=list)    # live, named as candidates in config
+    missing: list[str] = field(default_factory=list)  # configured, not listed on chain
+    delisted: list[str] = field(default_factory=list)  # configured, listed but delisted
+    candidates: list[str] = field(default_factory=list)  # live, named as candidates in config
     unclassified: list[str] = field(default_factory=list)  # live, in neither legs nor candidates
 
     @property

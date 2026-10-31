@@ -64,8 +64,10 @@ def caption(s: Settings, day: date, hour: datetime, info: dict, market_mover, pe
     def pp(x):
         return "n/a" if x is None else f"{x * 100:+.1f}pp"
 
-    lines = [f"Tape {day.isoformat()}  ·  as of {hour.astimezone(ET).strftime('%H:%M ET')}"
-             + ("" if scheduled else " (late: scheduled sweep missing)")]
+    lines = [
+        f"Tape {day.isoformat()}  ·  as of {hour.astimezone(ET).strftime('%H:%M ET')}"
+        + ("" if scheduled else " (late: scheduled sweep missing)")
+    ]
     lines.append(f"Complex whale net {pct(info['complex_whale_net'])} of OI, 24h {pp(info['complex_change'])}")
     if info.get("mover"):
         lines.append(f"Biggest leg move: {info['mover']} {pp(info['mover_change'])}")

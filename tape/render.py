@@ -111,10 +111,13 @@ def _plot_line(ax, line: Line, dashed_below: float, lw: float) -> None:
     ys = [math.nan if p[1] is None else p[1] for p in line.points]
     if not xs:
         return
-    solid = [y if (c is not None and c >= dashed_below) else math.nan for (_, _, c), y in zip(line.points, ys, strict=True)]
+    solid = [
+        y if (c is not None and c >= dashed_below) else math.nan for (_, _, c), y in zip(line.points, ys, strict=True)
+    ]
     # The dashed line runs under everything; solid covers the hours with enough coverage.
-    ax.plot(xs, ys, color=line.color, lw=lw * 0.8, ls="--")
-    ax.plot(xs, solid, color=line.color, lw=lw, label=line.label)
+    marker = "o" if len(xs) <= 3 else None  # a line needs two points; show the first hours as dots
+    ax.plot(xs, ys, color=line.color, lw=lw * 0.8, ls="--", marker=marker, ms=4)
+    ax.plot(xs, solid, color=line.color, lw=lw, label=line.label, marker=marker, ms=5)
 
 
 def _last_point(line: Line) -> tuple[datetime, float] | None:
@@ -134,7 +137,10 @@ def _style_axes(ax, fmt: str) -> None:
         ax.spines[s].set_visible(False)
 
 
-def _date_axis(ax, span_days: float) -> None:
+def _date_axis(ax, span_days: float, xlim: tuple[datetime, datetime] | None = None) -> None:
+    if xlim:
+        ax.set_xlim(*xlim)
+        span_days = (xlim[1] - xlim[0]).total_seconds() / 86400
     ax.xaxis.set_major_locator(AutoDateLocator(minticks=4, maxticks=10))
     ax.xaxis.set_major_formatter(DateFormatter("%b %d" if span_days > 2 else "%H:%M"))
 
@@ -155,10 +161,12 @@ def render_card(
     marker: Marker | None,
     footer: Footer,
     dashed_below: float,
-    size: ChartSize = ChartSize(),
+    size: ChartSize | None = None,
+    xlim: tuple[datetime, datetime] | None = None,
 ) -> bytes:
     """One panel of lines (whale net as a share of OI), an optional bar strip
     under it (the day's change per line), and an optional hand-drawn callout."""
+    size = size or ChartSize()
     fig = _figure(size.width, size.height)
     if bars:
         gs = fig.add_gridspec(2, 1, height_ratios=[4, 1.1], hspace=0.35, left=0.07, right=0.80, top=0.91, bottom=0.10)
@@ -177,9 +185,10 @@ def render_card(
         span = (max(all_x) - min(all_x)).total_seconds() / 86400
     for ln in lines:
         _plot_line(ax, ln, dashed_below, 3.2 if ln.heavy else 1.6)
-    _date_axis(ax, span)
-    ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=True, fontsize=10, edgecolor="#7F7F7F",
-              fancybox=False)
+    _date_axis(ax, span, xlim)
+    ax.legend(
+        loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=True, fontsize=10, edgecolor="#7F7F7F", fancybox=False
+    )
 
     if callout:
         target = next((ln for ln in lines if ln.label == callout.line_label), None)
@@ -190,15 +199,28 @@ def render_card(
             ylo, yhi = ax.get_ylim()
             dy = (yhi - ylo) * (0.18 if v < (ylo + yhi) / 2 else -0.18)
             ax.annotate(
-                callout.text, xy=(t, v), xytext=(-150, 60 if dy > 0 else -60), textcoords="offset points",
-                color=CALLOUT, fontsize=13, fontweight="bold",
+                callout.text,
+                xy=(t, v),
+                xytext=(-150, 60 if dy > 0 else -60),
+                textcoords="offset points",
+                color=CALLOUT,
+                fontsize=13,
+                fontweight="bold",
                 arrowprops=dict(arrowstyle="->", color=CALLOUT, lw=2, connectionstyle="arc3,rad=-0.35"),
             )
 
     if marker:
         ax.axvline(marker.time, color=CALLOUT, lw=1.5, ls=":")
-        ax.annotate(marker.text, xy=(marker.time, ax.get_ylim()[1]), xytext=(-8, -16), textcoords="offset points",
-                    ha="right", color=CALLOUT, fontsize=11, fontweight="bold")
+        ax.annotate(
+            marker.text,
+            xy=(marker.time, ax.get_ylim()[1]),
+            xytext=(-8, -16),
+            textcoords="offset points",
+            ha="right",
+            color=CALLOUT,
+            fontsize=11,
+            fontweight="bold",
+        )
 
     if axb is not None and bars:
         vals = [0.0 if b.value is None else b.value for b in bars]
@@ -211,15 +233,29 @@ def render_card(
         axb.set_ylim(-lim, lim)
         for i, b in enumerate(bars):
             if b.value is not None:
-                axb.text(i, vals[i], f"{b.value * 100:+.1f}pp", ha="center",
-                         va="bottom" if vals[i] >= 0 else "top", fontsize=9)
+                axb.text(
+                    i,
+                    vals[i],
+                    f"{b.value * 100:+.1f}pp",
+                    ha="center",
+                    va="bottom" if vals[i] >= 0 else "top",
+                    fontsize=9,
+                )
     _footer(fig, footer)
     return _png(fig)
 
 
-def render_panels(*, title: str, panels: list[Panel], footer: Footer, dashed_below: float,
-                  size: ChartSize = ChartSize(1200, 1000)) -> bytes:
+def render_panels(
+    *,
+    title: str,
+    panels: list[Panel],
+    footer: Footer,
+    dashed_below: float,
+    size: ChartSize | None = None,
+    xlim: tuple[datetime, datetime] | None = None,
+) -> bytes:
     """A market page chart: stacked panels sharing the time axis."""
+    size = size or ChartSize(1200, 1000)
     fig = _figure(size.width, size.height)
     n = len(panels)
     axes = fig.subplots(n, 1, sharex=True)
@@ -238,15 +274,26 @@ def render_panels(*, title: str, panels: list[Panel], footer: Footer, dashed_bel
                 span = max(span, (ln.points[-1][0] - ln.points[0][0]).total_seconds() / 86400)
         ax.set_title(p.title, loc="left", fontsize=11)
         if len(p.lines) > 1:
-            ax.legend(loc="upper left", fontsize=8, frameon=True, fancybox=False, edgecolor="#7F7F7F", ncol=len(p.lines))
-    _date_axis(axes[-1], span)
+            ax.legend(
+                loc="upper left", fontsize=8, frameon=True, fancybox=False, edgecolor="#7F7F7F", ncol=len(p.lines)
+            )
+    _date_axis(axes[-1], span, xlim)
     _footer(fig, footer)
     return _png(fig)
 
 
-def render_grid(*, title: str, panels: list[tuple[str, Line]], footer: Footer, dashed_below: float,
-                size: ChartSize = ChartSize(), cols: int = 4) -> bytes:
+def render_grid(
+    *,
+    title: str,
+    panels: list[tuple[str, Line]],
+    footer: Footer,
+    dashed_below: float,
+    size: ChartSize | None = None,
+    cols: int = 4,
+    xlim: tuple[datetime, datetime] | None = None,
+) -> bytes:
     """Small multiples, one panel per leg, same y scale."""
+    size = size or ChartSize()
     fig = _figure(size.width, size.height)
     rows = max(1, math.ceil(len(panels) / cols))
     axes = fig.subplots(rows, cols, sharex=True, sharey=True, squeeze=False)
@@ -266,13 +313,14 @@ def render_grid(*, title: str, panels: list[tuple[str, Line]], footer: Footer, d
         if ln.points:
             span = max(span, (ln.points[-1][0] - ln.points[0][0]).total_seconds() / 86400)
         ax.tick_params(labelsize=8)
-    _date_axis(axes.flat[0], span)
+    _date_axis(axes.flat[0], span, xlim)
     _footer(fig, footer)
     return _png(fig)
 
 
-def render_notice(*, text: str, footer: Footer, size: ChartSize = ChartSize()) -> bytes:
+def render_notice(*, text: str, footer: Footer, size: ChartSize | None = None) -> bytes:
     """A plain card for when there is no chart to show (gap day, no data yet)."""
+    size = size or ChartSize()
     fig = _figure(size.width, size.height)
     fig.text(0.05, 0.6, text, fontsize=20, va="center", wrap=True)
     _footer(fig, footer)

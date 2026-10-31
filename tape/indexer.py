@@ -35,7 +35,7 @@ import websockets
 
 from . import alerts
 from .events import EventRules, position_events
-from .fills import Fill, from_user_fill, from_ws_trade, liquidated_user
+from .fills import Fill, estimate_first_fill, from_user_fill, from_ws_trade, liquidated_user
 from .hl import HIGH, LOW, InfoClient, WeightBucket
 from .settings import Settings
 from .store import load_universe, write_markets
@@ -46,6 +46,7 @@ log = logging.getLogger("tape.indexer")
 
 WS_PING_S = 30
 SWEEP_CONCURRENCY = 8
+BACKGROUND_CONCURRENCY = 4
 HISTORY_PAGES = 3
 
 
@@ -56,8 +57,8 @@ class Indexer:
         per_min = float(ix["info_weight_per_minute"]) * float(ix["budget_fraction"])
         self.bucket = WeightBucket(per_min, float(ix["low_priority_reserve"]))
         self.info = InfoClient(settings.env.info_url, self.bucket)
-        self.db = conn            # general queries, guarded by db_lock
-        self.wdb = wconn          # fill writer only
+        self.db = conn  # general queries, guarded by db_lock
+        self.wdb = wconn  # fill writer only
         self.db_lock = asyncio.Lock()
         self.universe: Universe | None = None
         self.rules = EventRules.from_config(settings.t("events"))
@@ -109,14 +110,18 @@ class Indexer:
         if u.unclassified or u.candidates:
             log.info("live but not in the complex: candidates %s; unclassified %d", u.candidates, len(u.unclassified))
         if old and set(u.coins) != old:
-            log.warning("universe changed: +%s -%s; resubscribing", sorted(set(u.coins) - old), sorted(old - set(u.coins)))
+            log.warning(
+                "universe changed: +%s -%s; resubscribing", sorted(set(u.coins) - old), sorted(old - set(u.coins))
+            )
             self.resubscribe.set()
 
     async def load_state(self) -> None:
         rows = await self.q("select address, dex from address_dexes")
         self.addr_dex_seen = {(r["address"], r["dex"]) for r in rows}
         self.addr_seen = {a for a, _ in self.addr_dex_seen}
-        last = await self.q("select hour, finished_at from sweeps where finished_at is not null order by hour desc limit 1")
+        last = await self.q(
+            "select hour, finished_at from sweeps where finished_at is not null order by hour desc limit 1"
+        )
         first = await self.q("select min(finished_at) as t from sweeps where finished_at is not null")
         warm = timedelta(hours=float(self.s.t("events", "warmup_hours")))
         self.alerts_from = (first[0]["t"] + warm) if first and first[0]["t"] else None
@@ -154,7 +159,9 @@ class Indexer:
             try:
                 async with websockets.connect(self.s.env.ws_url, ping_interval=None, max_size=2**24) as ws:
                     for c in coins:
-                        await ws.send(json.dumps({"method": "subscribe", "subscription": {"type": "trades", "coin": c}}))
+                        await ws.send(
+                            json.dumps({"method": "subscribe", "subscription": {"type": "trades", "coin": c}})
+                        )
                     log.info("ws subscribed to %d markets", len(coins))
                     self.resubscribe.clear()
                     self.schedule_gap_backfill()
@@ -216,8 +223,15 @@ class Indexer:
                 continue
             if self.alerts_on():
                 for ev in position_events(
-                    time=f.time, et_day=et_day(f.time).isoformat(), coin=f.coin, address=addr,
-                    prev_size=prev, new_size=new, mark=f.px, is_whale=addr in self.whales, rules=self.rules,
+                    time=f.time,
+                    et_day=et_day(f.time).isoformat(),
+                    coin=f.coin,
+                    address=addr,
+                    prev_size=prev,
+                    new_size=new,
+                    mark=f.px,
+                    is_whale=addr in self.whales,
+                    rules=self.rules,
                 ):
                     self.event_q.put_nowait(ev)
             liq = self.liq_px.get(key)
@@ -292,7 +306,9 @@ class Indexer:
 
     # ---- snapshots -----------------------------------------------------
 
-    def parse_positions(self, state: dict, dex: str) -> list[tuple[str, float, float | None, float | None, float | None]]:
+    def parse_positions(
+        self, state: dict, dex: str
+    ) -> list[tuple[str, float, float | None, float | None, float | None]]:
         out = []
         for ap in state.get("assetPositions") or []:
             p = ap.get("position") or {}
@@ -318,13 +334,16 @@ class Indexer:
         self.known[dex].add(address)
 
     async def discover_loop(self) -> None:
-        while True:
-            addr, dex = await self.discover_q.get()
-            try:
-                st = await self.info.clearinghouse_state(addr, dex, HIGH)
-                self.set_running(addr, dex, self.parse_positions(st, dex))
-            except Exception as e:
-                log.warning("discovery snapshot %s/%s failed: %s", addr, dex, e)
+        async def worker() -> None:
+            while True:
+                addr, dex = await self.discover_q.get()
+                try:
+                    st = await self.info.clearinghouse_state(addr, dex, HIGH)
+                    self.set_running(addr, dex, self.parse_positions(st, dex))
+                except Exception as e:
+                    log.warning("discovery snapshot %s/%s failed: %s", addr, dex, e)
+
+        await asyncio.gather(*(worker() for _ in range(BACKGROUND_CONCURRENCY)))
 
     async def sweep_loop(self) -> None:
         offset = float(self.s.t("indexer", "sweep_offset_s"))
@@ -356,7 +375,6 @@ class Indexer:
                 "insert into sweeps (hour, started_at) values (%s, %s) on conflict (hour) do update set started_at = excluded.started_at",
                 (hour, started),
             )
-        weight0 = self.info.weight_spent
         ctx_rows = []
         for dex in self.universe.dexes:
             meta, ctxs = await self.info.meta_and_ctxs(dex)
@@ -365,8 +383,18 @@ class Indexer:
                 if coin not in self.universe.markets or not c.get("markPx"):
                     continue
                 self.marks[coin] = float(c["markPx"])
-                ctx_rows.append((coin, hour, float(c["openInterest"]), float(c["markPx"]), _f(c.get("oraclePx")),
-                                 _f(c.get("funding")), _f(c.get("premium")), _f(c.get("dayNtlVlm"))))
+                ctx_rows.append(
+                    (
+                        coin,
+                        hour,
+                        float(c["openInterest"]),
+                        float(c["markPx"]),
+                        _f(c.get("oraclePx")),
+                        _f(c.get("funding")),
+                        _f(c.get("premium")),
+                        _f(c.get("dayNtlVlm")),
+                    )
+                )
         async with self.db_lock, self.db.cursor() as cur:
             await cur.executemany(
                 """insert into market_hours (coin, hour, oi, mark, oracle, funding, premium, day_ntl_vlm)
@@ -404,7 +432,9 @@ class Indexer:
         await asyncio.gather(*(one(a, d) for a, d in targets))
         async with self.db_lock, self.db.cursor() as cur:
             await cur.execute("delete from snapshots where hour = %s", (hour,))
-            async with cur.copy("copy snapshots (hour, coin, address, size, entry_px, leverage, liq_px) from stdin") as cp:
+            async with cur.copy(
+                "copy snapshots (hour, coin, address, size, entry_px, leverage, liq_px) from stdin"
+            ) as cp:
                 for r in snap_rows:
                     await cp.write_row(r)
             await cur.executemany(
@@ -418,12 +448,18 @@ class Indexer:
             await cur.execute(
                 """update sweeps set finished_at = now(), addresses = %s, requests = %s, positions = %s, errors = %s
                    where hour = %s""",
-                (len(swept), self.info.weight_spent - weight0, len(snap_rows), errors, hour),
+                (len(swept), len(targets), len(snap_rows), errors, hour),
             )
         if self.alerts_from is None:
             self.alerts_from = utcnow() + timedelta(hours=float(self.s.t("events", "warmup_hours")))
-        log.info("sweep %s done in %.0fs: %d swept, %d positions, %d errors",
-                 hour.isoformat(), (utcnow() - started).total_seconds(), len(swept), len(snap_rows), errors)
+        log.info(
+            "sweep %s done in %.0fs: %d swept, %d positions, %d errors",
+            hour.isoformat(),
+            (utcnow() - started).total_seconds(),
+            len(swept),
+            len(snap_rows),
+            errors,
+        )
 
     def launch_metrics(self) -> None:
         if os.environ.get("TAPE_METRICS_AFTER_SWEEP", "1") != "1":
@@ -454,12 +490,15 @@ class Indexer:
             if not rows:
                 await asyncio.sleep(60)
                 continue
-            for r in rows:
-                await self.check_history(r["address"], coins)
+            sem = asyncio.Semaphore(BACKGROUND_CONCURRENCY)
+
+            async def one(a: str, sem=sem, coins=coins) -> None:
+                async with sem:
+                    await self.check_history(a, coins)
+
+            await asyncio.gather(*(one(r["address"]) for r in rows))
 
     async def check_history(self, address: str, coins: set[str]) -> None:
-        from .fills import estimate_first_fill
-
         pages: list[list[dict]] = []
         start = 0
         try:
@@ -480,30 +519,32 @@ class Indexer:
         )
 
     async def seed_loop(self) -> None:
+        sem = asyncio.Semaphore(BACKGROUND_CONCURRENCY)
+
+        async def one(addr: str, dex: str) -> None:
+            async with sem:
+                try:
+                    st = await self.info.clearinghouse_state(addr, dex, LOW)
+                except Exception as e:
+                    log.debug("seed %s/%s failed: %s", addr, dex, e)
+                    return
+            ps = self.parse_positions(st, dex)
+            if ps:
+                self.set_running(addr, dex, ps)
+                self.addr_dex_seen.add((addr, dex))
+                self.stats["seeded_with_position"] += 1
+            await self.q(
+                "update address_dexes set seed_pending = false, last_position_hour = %s where address = %s and dex = %s",
+                (floor_hour(utcnow()) if ps else None, addr, dex),
+            )
+            self.stats["seeded"] += 1
+
         while True:
             rows = await self.q("select address, dex from address_dexes where seed_pending limit 200")
             if not rows:
                 await asyncio.sleep(120)
                 continue
-            for r in rows:
-                addr, dex = r["address"], r["dex"]
-                try:
-                    st = await self.info.clearinghouse_state(addr, dex, LOW)
-                except Exception as e:
-                    log.debug("seed %s/%s failed: %s", addr, dex, e)
-                    continue
-                ps = self.parse_positions(st, dex)
-                hour = floor_hour(utcnow())
-                if ps:
-                    self.set_running(addr, dex, ps)
-                    self.addr_dex_seen.add((addr, dex))
-                await self.q(
-                    "update address_dexes set seed_pending = false, last_position_hour = %s where address = %s and dex = %s",
-                    (hour if ps else None, addr, dex),
-                )
-                self.stats["seeded"] += 1
-                if ps:
-                    self.stats["seeded_with_position"] += 1
+            await asyncio.gather(*(one(r["address"], r["dex"]) for r in rows))
 
     async def backfill(self, start_ms: int, end_ms: int) -> None:
         targets = await self.sweep_set()
@@ -532,8 +573,16 @@ class Indexer:
                 log.warning("liquidation check %s failed: %s", addr, e)
                 continue
             rows = [
-                (f["coin"], int(f["tid"]), addr, from_ms(int(f["time"])), float(f["sz"]), float(f["px"]),
-                 float(f["sz"]) * float(f["px"]), (f.get("liquidation") or {}).get("method"))
+                (
+                    f["coin"],
+                    int(f["tid"]),
+                    addr,
+                    from_ms(int(f["time"])),
+                    float(f["sz"]),
+                    float(f["px"]),
+                    float(f["sz"]) * float(f["px"]),
+                    (f.get("liquidation") or {}).get("method"),
+                )
                 for f in fills
                 if f.get("coin") in self.universe.markets and liquidated_user(f) == addr
             ]
@@ -568,15 +617,25 @@ class Indexer:
                     await self.load_universe()
             log.info(
                 "stats: %s; addresses %d; queue %d; weight/min budget %.0f",
-                dict(self.stats), len(self.addr_seen), self.fill_q.qsize(), self.bucket.capacity,
+                dict(self.stats),
+                len(self.addr_seen),
+                self.fill_q.qsize(),
+                self.bucket.capacity,
             )
 
     async def run(self) -> None:
         await self.load_universe()
         await self.load_state()
         tasks = [
-            self.ws_loop(), self.writer_loop(), self.sweep_loop(), self.discover_loop(),
-            self.history_loop(), self.seed_loop(), self.liq_loop(), self.alerts_loop(), self.refresh_loop(),
+            self.ws_loop(),
+            self.writer_loop(),
+            self.sweep_loop(),
+            self.discover_loop(),
+            self.history_loop(),
+            self.seed_loop(),
+            self.liq_loop(),
+            self.alerts_loop(),
+            self.refresh_loop(),
         ]
         await asyncio.gather(*(asyncio.create_task(t) for t in tasks))
 
@@ -586,8 +645,10 @@ async def insert_events_async(conn, evs) -> None:
         await cur.executemany(
             """insert into events (time, coin, kind, address, size_usd, detail, dedupe_key, chart_hour)
                values (%s, %s, %s, %s, %s, %s, %s, %s) on conflict (dedupe_key) do nothing""",
-            [(e.time, e.coin, e.kind, e.address, e.size_usd, json.dumps(e.detail), e.dedupe_key, floor_hour(e.time))
-             for e in evs],
+            [
+                (e.time, e.coin, e.kind, e.address, e.size_usd, json.dumps(e.detail), e.dedupe_key, floor_hour(e.time))
+                for e in evs
+            ],
         )
 
 

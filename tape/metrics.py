@@ -66,7 +66,9 @@ def ensure_cohorts(conn, s: Settings, hour: datetime, positions: list[Position],
     recompute = int(s.t("cohorts", "recompute_hour_et"))
     floor = float(s.t("coverage", "post_min"))
     day = cohort_day(hour, recompute)
-    have = conn.execute("select meta from runs where job = 'cohorts' and key = %s and ok", (day.isoformat(),)).fetchone()
+    have = conn.execute(
+        "select meta from runs where job = 'cohorts' and key = %s and ok", (day.isoformat(),)
+    ).fetchone()
     if have:
         meta = have["meta"] or {}
         cov, at = meta.get("coverage"), meta.get("hour")
@@ -88,8 +90,15 @@ def complex_coverage(positions: list[Position], ctxs: dict[str, MarketCtx]) -> f
     return longs / oi if oi > 0 else None
 
 
-def compute_cohorts(conn, s: Settings, day: date, hour: datetime, positions: list[Position],
-                    ctxs: dict[str, MarketCtx], rules: CohortRules) -> None:
+def compute_cohorts(
+    conn,
+    s: Settings,
+    day: date,
+    hour: datetime,
+    positions: list[Position],
+    ctxs: dict[str, MarketCtx],
+    rules: CohortRules,
+) -> None:
     lookback = timedelta(days=float(s.t("cohorts", "bot_lookback_days")))
     start = hour - lookback
     first_ws = conn.execute("select min(time) as t from fills where source = 'ws'").fetchone()["t"]
@@ -135,10 +144,20 @@ def compute_cohorts(conn, s: Settings, day: date, hour: datetime, positions: lis
                values ('cohorts', %s, now(), now(), true, %s, %s)
                on conflict (job, key) do update set finished_at = now(), ok = true, note = excluded.note,
                meta = excluded.meta""",
-            (day.isoformat(), f"from snapshot {hour_key(hour)}; {len(whales)} whales, {len(bots)} bots",
-             json.dumps({"hour": hour_key(hour), "coverage": complex_coverage(positions, ctxs)})),
+            (
+                day.isoformat(),
+                f"from snapshot {hour_key(hour)}; {len(whales)} whales, {len(bots)} bots",
+                json.dumps({"hour": hour_key(hour), "coverage": complex_coverage(positions, ctxs)}),
+            ),
         )
-    log.info("cohorts for %s from %s: %d whales, %d bots, %d addresses", day, hour_key(hour), len(whales), len(bots), len(rows))
+    log.info(
+        "cohorts for %s from %s: %d whales, %d bots, %d addresses",
+        day,
+        hour_key(hour),
+        len(whales),
+        len(bots),
+        len(rows),
+    )
 
 
 def is_warm(conn, s: Settings, hour: datetime) -> bool:
@@ -148,8 +167,9 @@ def is_warm(conn, s: Settings, hour: datetime) -> bool:
     return hour >= first + timedelta(hours=float(s.t("events", "warmup_hours")))
 
 
-def snapshot_events(conn, s: Settings, hour: datetime, positions: list[Position], ctxs: dict[str, MarketCtx],
-                    whales: set[str]) -> list[Event]:
+def snapshot_events(
+    conn, s: Settings, hour: datetime, positions: list[Position], ctxs: dict[str, MarketCtx], whales: set[str]
+) -> list[Event]:
     """Whale flips and entries between the previous sweep and this one, for
     addresses that were in both (their previous position is known)."""
     prev_hour = conn.execute(
@@ -163,16 +183,27 @@ def snapshot_events(conn, s: Settings, hour: datetime, positions: list[Position]
         for r in conn.execute("select address, dex from address_dexes where first_swept_hour <= %s", (prev_hour,))
     }
     dex_of = {c: c.split(":")[0] for c in ctxs}
-    prev = {(r["address"], r["coin"]): r["size"]
-            for r in conn.execute("select address, coin, size from snapshots where hour = %s", (prev_hour,))}
+    prev = {
+        (r["address"], r["coin"]): r["size"]
+        for r in conn.execute("select address, coin, size from snapshots where hour = %s", (prev_hour,))
+    }
     cur = {(p.address, p.coin): p.size for p in positions}
     out: list[Event] = []
     day = et_day(hour).isoformat()
-    for (a, c) in set(prev) | set(cur):
+    for a, c in set(prev) | set(cur):
         if c not in ctxs or (a, dex_of[c]) not in known:
             continue
-        out += position_events(time=hour, et_day=day, coin=c, address=a, prev_size=prev.get((a, c), 0.0),
-                               new_size=cur.get((a, c), 0.0), mark=ctxs[c].mark, is_whale=a in whales, rules=rules)
+        out += position_events(
+            time=hour,
+            et_day=day,
+            coin=c,
+            address=a,
+            prev_size=prev.get((a, c), 0.0),
+            new_size=cur.get((a, c), 0.0),
+            mark=ctxs[c].mark,
+            is_whale=a in whales,
+            rules=rules,
+        )
     return out
 
 
@@ -191,8 +222,10 @@ def insert_events(conn, evs: list[Event]) -> int:
 
 
 def update_position_since(conn, hour: datetime, positions: list[Position]) -> dict[tuple[str, str], datetime]:
-    old = {(r["address"], r["coin"]): (r["sign"], r["since_hour"])
-           for r in conn.execute("select address, coin, sign, since_hour from position_since")}
+    old = {
+        (r["address"], r["coin"]): (r["sign"], r["since_hour"])
+        for r in conn.execute("select address, coin, sign, since_hour from position_since")
+    }
     new: dict[tuple[str, str], tuple[int, datetime]] = {}
     for p in positions:
         sign = 1 if p.size > 0 else -1
@@ -247,12 +280,24 @@ def run_hour(conn, s: Settings, hour: datetime) -> list[Row]:
         (hour - timedelta(hours=1), hour),
     ):
         liq[r["coin"]] = r["n"]
-    prev = {r["subject"]: r["value"] for r in conn.execute(
-        "select subject, value from series where metric = 'whale_net' and hour = %s and value is not null",
-        (hour - timedelta(hours=24),),
-    )}
-    inp = HourInputs(ctxs=ctxs, positions=positions, whales=whales, bots=bots, fresh=fresh, liq_usd=liq,
-                     whale_net_24h_ago=prev, rules=rules, crowding_top_n=int(s.t("cohorts", "crowding_top_n")))
+    prev = {
+        r["subject"]: r["value"]
+        for r in conn.execute(
+            "select subject, value from series where metric = 'whale_net' and hour = %s and value is not null",
+            (hour - timedelta(hours=24),),
+        )
+    }
+    inp = HourInputs(
+        ctxs=ctxs,
+        positions=positions,
+        whales=whales,
+        bots=bots,
+        fresh=fresh,
+        liq_usd=liq,
+        whale_net_24h_ago=prev,
+        rules=rules,
+        crowding_top_n=int(s.t("cohorts", "crowding_top_n")),
+    )
     rows = compute_hour(inp)
 
     with conn.cursor() as cur:
@@ -265,10 +310,23 @@ def run_hour(conn, s: Settings, hour: datetime) -> list[Row]:
     tops = top_positions(inp, n=int(s.t("cohorts", "whale_count")))
     with conn.cursor() as cur:
         cur.execute("delete from top_positions where hour = %s or hour < %s", (hour, hour - timedelta(days=2)))
-        with cur.copy("copy top_positions (coin, hour, rank, address, size, notional, cohort, fresh, since_hour) from stdin") as cp:
+        with cur.copy(
+            "copy top_positions (coin, hour, rank, address, size, notional, cohort, fresh, since_hour) from stdin"
+        ) as cp:
             for t in tops:
-                cp.write_row((t.coin, hour, t.rank, t.address, t.size, t.notional, t.cohort, t.fresh,
-                              since.get((t.address, t.coin))))
+                cp.write_row(
+                    (
+                        t.coin,
+                        hour,
+                        t.rank,
+                        t.address,
+                        t.size,
+                        t.notional,
+                        t.cohort,
+                        t.fresh,
+                        since.get((t.address, t.coin)),
+                    )
+                )
 
     if is_warm(conn, s, hour):
         evs = snapshot_events(conn, s, hour, positions, ctxs, whales)
@@ -278,8 +336,9 @@ def run_hour(conn, s: Settings, hour: datetime) -> list[Row]:
             if r.subject in ctxs:
                 by_coin[r.subject][r.metric] = r.value
         for coin, vals in by_coin.items():
-            evs += market_events(time=hour, hour_key=hour_key(hour), et_day=et_day(hour).isoformat(), coin=coin,
-                                 values=vals, rules=er)
+            evs += market_events(
+                time=hour, hour_key=hour_key(hour), et_day=et_day(hour).isoformat(), coin=coin, values=vals, rules=er
+            )
         n = insert_events(conn, evs)
         if n:
             log.info("%s: %d new events", hour_key(hour), n)
@@ -304,7 +363,23 @@ def write_daily(conn, s: Settings, hour: datetime, rows: list[Row]) -> None:
     log.info("daily rows for %s: %d written; under coverage: %s", day, len(keep), skipped or "none")
 
 
+METRICS_LOCK = 0x7A9E_0001  # advisory lock id: one metrics job at a time (timer and post-sweep can overlap)
+
+
 def run(conn, s: Settings, hours: list[datetime] | None = None, render: bool = True) -> list[datetime]:
+    got = conn.execute("select pg_try_advisory_lock(%s) as ok", (METRICS_LOCK,)).fetchone()["ok"]
+    conn.commit()
+    if not got:
+        log.info("another metrics job is running; exiting")
+        return []
+    try:
+        return _run(conn, s, hours, render)
+    finally:
+        conn.execute("select pg_advisory_unlock(%s)", (METRICS_LOCK,))
+        conn.commit()
+
+
+def _run(conn, s: Settings, hours: list[datetime] | None, render: bool) -> list[datetime]:
     publish_definitions(conn, s)
     conn.commit()
     hours = hours if hours is not None else pending_hours(conn)
@@ -319,16 +394,20 @@ def run(conn, s: Settings, hours: list[datetime] | None = None, render: bool = T
         conn.commit()
         try:
             rows = run_hour(conn, s, h)
-            conn.execute("update runs set finished_at = now(), ok = true, note = %s where job = 'metrics' and key = %s",
-                         (f"{len(rows)} rows", key))
+            conn.execute(
+                "update runs set finished_at = now(), ok = true, note = %s where job = 'metrics' and key = %s",
+                (f"{len(rows)} rows", key),
+            )
             conn.commit()
             done.append(h)
             cx = {r.metric: r.value for r in rows if r.subject == COMPLEX}
             log.info("%s: complex whale net %s, coverage %s", key, _pct(cx.get("whale_net")), _pct(cx.get("coverage")))
         except Exception as e:
             conn.rollback()
-            conn.execute("update runs set finished_at = now(), ok = false, note = %s where job = 'metrics' and key = %s",
-                         (repr(e)[:500], key))
+            conn.execute(
+                "update runs set finished_at = now(), ok = false, note = %s where job = 'metrics' and key = %s",
+                (repr(e)[:500], key),
+            )
             conn.commit()
             log.exception("metrics for %s failed", key)
     if render and done:

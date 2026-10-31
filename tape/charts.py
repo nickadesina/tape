@@ -37,6 +37,8 @@ from .timeutil import ET, hour_key
 
 log = logging.getLogger("tape.charts")
 
+HEAVY_COLOR = "#000000"
+
 WINDOWS = (7, 30, 90)
 MARKET_PANELS = (
     ("whale_net", "Whale net, % of OI", "pct"),
@@ -123,9 +125,15 @@ def home_chart(conn, s: Settings, hour: datetime) -> tuple[bytes, dict]:
         note = "dashed: coverage under 98% (" + ", ".join(low_cov) + ")"
     png = render_card(
         title="Whale net positioning, AI complex on Hyperliquid (% of open interest)",
-        lines=lines, bars=bars or None, bars_title="Whale net change, last 24h",
-        callout=callout, marker=None, footer=footer(s, hour, note), dashed_below=thr,
+        lines=lines,
+        bars=bars or None,
+        bars_title="Whale net change, last 24h",
+        callout=callout,
+        marker=None,
+        footer=footer(s, hour, note),
+        dashed_below=thr,
         size=ChartSize(int(s.t("render", "width_px")), int(s.t("render", "height_px"))),
+        xlim=(hour - timedelta(days=days), hour),
     )
     info = {
         "complex_whale_net": last_value(data[(COMPLEX, "whale_net")]),
@@ -137,18 +145,22 @@ def home_chart(conn, s: Settings, hour: datetime) -> tuple[bytes, dict]:
     return png, info
 
 
-HEAVY_COLOR = "#000000"
-
-
 def legs_chart(conn, s: Settings, hour: datetime) -> bytes:
     days = int(s.t("daily", "window_days"))
     thr = float(s.t("coverage", "dashed_below"))
     legs = legs_in_order(conn)
     data = load_series(conn, [leg_subject(k) for k, _ in legs], ["whale_net"], hour - timedelta(days=days), hour)
-    panels = [(label, Line(label, data[(leg_subject(k), "whale_net")], EXCEL[i % len(EXCEL)]))
-              for i, (k, label) in enumerate(legs)]
-    return render_grid(title="Whale net by leg, % of open interest, 30 days", panels=panels,
-                       footer=footer(s, hour), dashed_below=thr)
+    panels = [
+        (label, Line(label, data[(leg_subject(k), "whale_net")], EXCEL[i % len(EXCEL)]))
+        for i, (k, label) in enumerate(legs)
+    ]
+    return render_grid(
+        title="Whale net by leg, % of open interest, 30 days",
+        panels=panels,
+        footer=footer(s, hour),
+        dashed_below=thr,
+        xlim=(hour - timedelta(days=days), hour),
+    )
 
 
 def market_chart(conn, s: Settings, coin: str, hour: datetime, days: int) -> bytes:
@@ -164,15 +176,21 @@ def market_chart(conn, s: Settings, coin: str, hour: datetime, days: int) -> byt
         panels.append(Panel(title, lines, fmt))
     cov = last_coverage(data[(coin, "whale_net")])
     cov_txt = "no data" if cov is None else f"coverage {cov * 100:.1f}%"
-    return render_panels(title=f"{coin}  ·  {days} days  ·  {cov_txt}", panels=panels,
-                         footer=footer(s, hour), dashed_below=thr)
+    return render_panels(
+        title=f"{coin}  ·  {days} days  ·  {cov_txt}",
+        panels=panels,
+        footer=footer(s, hour),
+        dashed_below=thr,
+        xlim=(hour - timedelta(days=days), hour),
+    )
 
 
 def card_chart(conn, s: Settings, coin: str, hour: datetime, marker: Marker | None = None, days: int = 7) -> bytes:
     """One market, the daily chart's panel zoomed to `days`."""
     thr = float(s.t("coverage", "dashed_below"))
-    data = load_series(conn, [coin], ["whale_net", "mid_net", "small_net", "whale_net_change"],
-                       hour - timedelta(days=days), hour)
+    data = load_series(
+        conn, [coin], ["whale_net", "mid_net", "small_net", "whale_net_change"], hour - timedelta(days=days), hour
+    )
     lines = [
         Line("whales", data[(coin, "whale_net")], HEAVY_COLOR, heavy=True),
         Line("mid", data[(coin, "mid_net")], EXCEL[0]),
@@ -184,9 +202,15 @@ def card_chart(conn, s: Settings, coin: str, hour: datetime, marker: Marker | No
     note = None if cov is None or cov >= thr else f"coverage {cov * 100:.1f}%: dashed under 98%"
     return render_card(
         title=f"{coin}: net positioning by cohort, % of open interest, {days} days",
-        lines=lines, bars=None, bars_title="", callout=callout, marker=marker,
-        footer=footer(s, hour, note), dashed_below=thr,
+        lines=lines,
+        bars=None,
+        bars_title="",
+        callout=callout,
+        marker=marker,
+        footer=footer(s, hour, note),
+        dashed_below=thr,
         size=ChartSize(int(s.t("render", "width_px")), int(s.t("render", "height_px"))),
+        xlim=(hour - timedelta(days=days), hour),
     )
 
 
@@ -243,8 +267,9 @@ def render_event(conn, s: Settings, event: dict) -> tuple[bytes, datetime] | Non
         return None
     text = describe(event["kind"], event["coin"], event["size_usd"], event["detail"])
     png = card_chart(conn, s, event["coin"], hour, marker=Marker(event["time"], text))
-    ChartStore(s.env).put(conn, "event", str(event["id"]), hour, png,
-                          (int(s.t("render", "width_px")), int(s.t("render", "height_px"))))
+    ChartStore(s.env).put(
+        conn, "event", str(event["id"]), hour, png, (int(s.t("render", "width_px")), int(s.t("render", "height_px")))
+    )
     return png, hour
 
 

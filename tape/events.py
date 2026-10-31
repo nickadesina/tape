@@ -74,12 +74,30 @@ def position_events(
         ps, ns = _sign(prev_size), _sign(new_size)
         if ps and ns and ps != ns and new_usd > rules.whale_flip_min_usd:
             side = "long" if ns > 0 else "short"
-            out.append(Event(time, coin, WHALE_FLIP, f"{WHALE_FLIP}:{coin}:{address}:{et_day}", address, new_usd,
-                             {**detail, "new_side": side}))
+            out.append(
+                Event(
+                    time,
+                    coin,
+                    WHALE_FLIP,
+                    f"{WHALE_FLIP}:{coin}:{address}:{et_day}",
+                    address,
+                    new_usd,
+                    {**detail, "new_side": side},
+                )
+            )
     elif new_usd > rules.whale_entry_min_usd and prev_usd <= rules.whale_entry_min_usd:
         side = "long" if new_size > 0 else "short"
-        out.append(Event(time, coin, WHALE_ENTRY, f"{WHALE_ENTRY}:{coin}:{address}:{et_day}", address, new_usd,
-                         {**detail, "side": side}))
+        out.append(
+            Event(
+                time,
+                coin,
+                WHALE_ENTRY,
+                f"{WHALE_ENTRY}:{coin}:{address}:{et_day}",
+                address,
+                new_usd,
+                {**detail, "side": side},
+            )
+        )
     return out
 
 
@@ -100,20 +118,42 @@ def market_events(
     cov = values.get("coverage")
     change = values.get("whale_net_change")
     if change is not None and abs(change) > rules.whale_net_move:
-        out.append(Event(time, coin, WHALE_NET_MOVE, f"{WHALE_NET_MOVE}:{coin}:{et_day}",
-                         detail={"change": change, "whale_net": values.get("whale_net"), "coverage": cov}))
+        out.append(
+            Event(
+                time,
+                coin,
+                WHALE_NET_MOVE,
+                f"{WHALE_NET_MOVE}:{coin}:{et_day}",
+                detail={"change": change, "whale_net": values.get("whale_net"), "coverage": cov},
+            )
+        )
     funding = values.get("funding")
     if funding is not None and abs(funding) > rules.funding_hourly:
-        out.append(Event(time, coin, FUNDING, f"{FUNDING}:{coin}:{et_day}",
-                         detail={"funding": funding, "funding_ann": values.get("funding_ann")}))
+        out.append(
+            Event(
+                time,
+                coin,
+                FUNDING,
+                f"{FUNDING}:{coin}:{et_day}",
+                detail={"funding": funding, "funding_ann": values.get("funding_ann")},
+            )
+        )
     premium = values.get("premium_bps")
     if premium is not None and abs(premium) > rules.premium_bps:
         out.append(Event(time, coin, PREMIUM, f"{PREMIUM}:{coin}:{et_day}", detail={"premium_bps": premium}))
     liq = values.get("liq_share")
     if liq is not None and liq > rules.liquidation_share:
         oi_usd = values.get("oi_usd") or 0.0
-        out.append(Event(time, coin, LIQUIDATIONS, f"{LIQUIDATIONS}:{coin}:{hour_key}", size_usd=liq * oi_usd,
-                         detail={"liq_share": liq, "oi_usd": oi_usd}))
+        out.append(
+            Event(
+                time,
+                coin,
+                LIQUIDATIONS,
+                f"{LIQUIDATIONS}:{coin}:{hour_key}",
+                size_usd=liq * oi_usd,
+                detail={"liq_share": liq, "oi_usd": oi_usd},
+            )
+        )
     return out
 
 

@@ -61,8 +61,13 @@ class ChartStore:
         data: bytes | None = None
         path: str | None = None
         if self.kind == "s3":
-            self._s3.put_object(Bucket=self.env.s3_bucket, Key=key, Body=png, ContentType="image/png",
-                                CacheControl="public, max-age=31536000, immutable")
+            self._s3.put_object(
+                Bucket=self.env.s3_bucket,
+                Key=key,
+                Body=png,
+                ContentType="image/png",
+                CacheControl="public, max-age=31536000, immutable",
+            )
             path = key
         elif self.kind == "local":
             p = self.env.chart_dir / key

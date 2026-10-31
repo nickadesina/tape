@@ -49,11 +49,13 @@ def match_text(s: Settings, text: str) -> dict:
                 continue
             hk = hour_key(r["hour"])
             slug = c.replace(":", "-")
-            out["charts"].append({
-                "coin": c,
-                "hour": hk,
-                "png": f"{s.env.site_url}/c/card/{slug}/{hk}.png",
-                "permalink": f"{s.env.site_url}/p/card/{slug}/{hk}",
-                "market": f"{s.env.site_url}/m/{slug}",
-            })
+            out["charts"].append(
+                {
+                    "coin": c,
+                    "hour": hk,
+                    "png": f"{s.env.site_url}/c/card/{slug}/{hk}.png",
+                    "permalink": f"{s.env.site_url}/p/card/{slug}/{hk}",
+                    "market": f"{s.env.site_url}/m/{slug}",
+                }
+            )
     return out

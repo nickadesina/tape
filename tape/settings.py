@@ -74,10 +74,7 @@ def _load_yaml(name: str) -> dict[str, Any]:
 
 def load_universe_config(raw: dict[str, Any] | None = None) -> UniverseConfig:
     raw = raw if raw is not None else _load_yaml("universe.yaml")
-    legs = {
-        key: Leg(key=key, label=v["label"], markets=tuple(v["markets"]))
-        for key, v in raw["legs"].items()
-    }
+    legs = {key: Leg(key=key, label=v["label"], markets=tuple(v["markets"])) for key, v in raw["legs"].items()}
     seen: dict[str, str] = {}
     for leg in legs.values():
         for m in leg.markets:

@@ -3,8 +3,18 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from tape.cohorts import (
-    BOT, MID, SMALL, WHALE, CohortRules, Position, SideFill, classify_bot, cohort_of, is_fresh,
-    median_hold_seconds, rank_whales,
+    BOT,
+    MID,
+    SMALL,
+    WHALE,
+    CohortRules,
+    Position,
+    SideFill,
+    classify_bot,
+    cohort_of,
+    is_fresh,
+    median_hold_seconds,
+    rank_whales,
 )
 from tape.compute import COMPLEX, HourInputs, MarketCtx, compute_hour, rows_by, top_positions
 from tape.events import EventRules, market_events, position_events
@@ -20,18 +30,30 @@ RULES = CohortRules()
 
 
 def test_ws_trade_users_are_buyer_then_seller():
-    f = from_ws_trade({"coin": "xyz:DRAM", "side": "B", "px": "48.4", "sz": "3", "time": 1793473256098,
-                       "hash": "0x1", "tid": 7, "users": ["0xAAA", "0xBBB"]})
+    f = from_ws_trade(
+        {
+            "coin": "xyz:DRAM",
+            "side": "B",
+            "px": "48.4",
+            "sz": "3",
+            "time": 1793473256098,
+            "hash": "0x1",
+            "tid": 7,
+            "users": ["0xAAA", "0xBBB"],
+        }
+    )
     assert (f.buyer, f.seller, f.side, f.source) == ("0xaaa", "0xbbb", "B", "ws")
     assert f.notional == pytest.approx(145.2)
 
 
 def test_user_fill_side_and_aggressor():
-    maker_sell = from_user_fill("0xA", {"coin": "xyz:MU", "px": "1", "sz": "2", "side": "A", "time": 1, "tid": 9,
-                                        "crossed": False})
+    maker_sell = from_user_fill(
+        "0xA", {"coin": "xyz:MU", "px": "1", "sz": "2", "side": "A", "time": 1, "tid": 9, "crossed": False}
+    )
     assert maker_sell.seller == "0xa" and maker_sell.buyer is None and maker_sell.side == "B"
-    taker_buy = from_user_fill("0xA", {"coin": "xyz:MU", "px": "1", "sz": "2", "side": "B", "time": 1, "tid": 9,
-                                       "crossed": True})
+    taker_buy = from_user_fill(
+        "0xA", {"coin": "xyz:MU", "px": "1", "sz": "2", "side": "B", "time": 1, "tid": 9, "crossed": True}
+    )
     assert taker_buy.buyer == "0xa" and taker_buy.side == "B"
     assert liquidated_user({"liquidation": {"liquidatedUser": "0xABC"}}) == "0xabc"
     assert liquidated_user({}) is None
@@ -84,15 +106,24 @@ def _inputs(**kw):
         "xyz:NVDA": MarketCtx("xyz:NVDA", "silicon", oi=50.0, mark=100.0, oracle=99.0, funding=0.0),
     }
     positions = [
-        Position("0xw", "xyz:CRWV", -40.0),   # whale short CRWV, $400
-        Position("0xw", "xyz:NVDA", 30.0),    # whale long NVDA, $3000
-        Position("0xs", "xyz:CRWV", 58.0),    # small long CRWV
+        Position("0xw", "xyz:CRWV", -40.0),  # whale short CRWV, $400
+        Position("0xw", "xyz:NVDA", 30.0),  # whale long NVDA, $3000
+        Position("0xs", "xyz:CRWV", 58.0),  # small long CRWV
         Position("0xs2", "xyz:CRWV", -18.0),
         Position("0xs3", "xyz:NVDA", 20.0),
         Position("0xs4", "xyz:NVDA", -50.0),
     ]
-    base = dict(ctxs=ctxs, positions=positions, whales={"0xw"}, bots=set(), fresh={"0xs"}, liq_usd={"xyz:CRWV": 50.0},
-                whale_net_24h_ago={"xyz:CRWV": -0.1}, rules=CohortRules(mid_floor_usd=10_000), crowding_top_n=1)
+    base = dict(
+        ctxs=ctxs,
+        positions=positions,
+        whales={"0xw"},
+        bots=set(),
+        fresh={"0xs"},
+        liq_usd={"xyz:CRWV": 50.0},
+        whale_net_24h_ago={"xyz:CRWV": -0.1},
+        rules=CohortRules(mid_floor_usd=10_000),
+        crowding_top_n=1,
+    )
     base.update(kw)
     return HourInputs(**base)
 
@@ -136,7 +167,7 @@ def test_position_events():
     flip = position_events(prev_size=10_000, new_size=-6_000, is_whale=True, **kw)
     assert [e.kind for e in flip] == ["whale_flip"] and flip[0].size_usd == 300_000
     assert position_events(prev_size=10_000, new_size=-4_000, is_whale=True, **kw) == []  # $200k < floor
-    assert position_events(prev_size=0, new_size=-6_000, is_whale=True, **kw) == []       # opening is not a flip
+    assert position_events(prev_size=0, new_size=-6_000, is_whale=True, **kw) == []  # opening is not a flip
     entry = position_events(prev_size=1_000, new_size=11_000, is_whale=False, **kw)
     assert [e.kind for e in entry] == ["whale_entry"]
     assert position_events(prev_size=11_000, new_size=12_000, is_whale=False, **kw) == []  # already over
@@ -145,20 +176,34 @@ def test_position_events():
 
 def test_market_events():
     rules = EventRules()
-    evs = market_events(time=H, hour_key="2026-10-31T19Z", et_day="2026-10-31", coin="xyz:DRAM", rules=rules,
-                        values={"whale_net_change": -0.06, "funding": 0.0006, "premium_bps": 10,
-                                "liq_share": 0.04, "oi_usd": 1e6, "coverage": 0.99})
+    evs = market_events(
+        time=H,
+        hour_key="2026-10-31T19Z",
+        et_day="2026-10-31",
+        coin="xyz:DRAM",
+        rules=rules,
+        values={
+            "whale_net_change": -0.06,
+            "funding": 0.0006,
+            "premium_bps": 10,
+            "liq_share": 0.04,
+            "oi_usd": 1e6,
+            "coverage": 0.99,
+        },
+    )
     assert sorted(e.kind for e in evs) == ["funding", "liquidations", "whale_net_move"]
     liq = next(e for e in evs if e.kind == "liquidations")
     assert liq.size_usd == pytest.approx(40_000)
-    assert market_events(time=H, hour_key="k", et_day="d", coin="c", rules=rules, values={"whale_net_change": None}) == []
+    assert (
+        market_events(time=H, hour_key="k", et_day="d", coin="c", rules=rules, values={"whale_net_change": None}) == []
+    )
 
 
 async def test_weight_bucket_priorities():
     t = [0.0]
     b = WeightBucket(60, low_reserve=0.5, clock=lambda: t[0])  # 1 token/s, capacity 60
     await b.acquire(40, HIGH)
-    assert b.wait_time(1, LOW) == pytest.approx(11)   # needs 20 + 30 floor, has 20
+    assert b.wait_time(1, LOW) == pytest.approx(11)  # needs 20 + 30 floor, has 20
     assert b.wait_time(1, HIGH) == 0
     t[0] = 30
     assert b.wait_time(1, LOW) == 0
@@ -167,22 +212,33 @@ async def test_weight_bucket_priorities():
 
 
 def _cfg():
-    return load_universe_config({
-        "dexes": ["xyz", "io"],
-        "legs": {"neo": {"label": "Neo", "markets": ["xyz:CRWV", "xyz:GONE"]},
-                 "gpu": {"label": "GPU", "markets": ["xyz:H100"]}},
-        "candidates": ["xyz:WDC"],
-        "aliases": {"xyz:CRWV": ["CoreWeave"]},
-    })
+    return load_universe_config(
+        {
+            "dexes": ["xyz", "io"],
+            "legs": {
+                "neo": {"label": "Neo", "markets": ["xyz:CRWV", "xyz:GONE"]},
+                "gpu": {"label": "GPU", "markets": ["xyz:H100"]},
+            },
+            "candidates": ["xyz:WDC"],
+            "aliases": {"xyz:CRWV": ["CoreWeave"]},
+        }
+    )
 
 
 def test_resolve_universe_against_meta():
-    metas = {"xyz": [{"universe": [
-        {"name": "xyz:CRWV", "maxLeverage": 10, "szDecimals": 2},
-        {"name": "xyz:H100", "maxLeverage": 10, "szDecimals": 0, "isDelisted": True},
-        {"name": "xyz:WDC", "maxLeverage": 10, "szDecimals": 3},
-        {"name": "xyz:TSLA", "maxLeverage": 20, "szDecimals": 3},
-    ]}, []]}
+    metas = {
+        "xyz": [
+            {
+                "universe": [
+                    {"name": "xyz:CRWV", "maxLeverage": 10, "szDecimals": 2},
+                    {"name": "xyz:H100", "maxLeverage": 10, "szDecimals": 0, "isDelisted": True},
+                    {"name": "xyz:WDC", "maxLeverage": 10, "szDecimals": 3},
+                    {"name": "xyz:TSLA", "maxLeverage": 20, "szDecimals": 3},
+                ]
+            },
+            [],
+        ]
+    }
     u = resolve(_cfg(), metas)
     assert u.coins == ["xyz:CRWV"]
     assert u.markets["xyz:CRWV"].leg == "neo" and u.markets["xyz:CRWV"].dex == "xyz"
@@ -192,8 +248,9 @@ def test_resolve_universe_against_meta():
 
 def test_config_rejects_market_in_two_legs():
     with pytest.raises(ValueError):
-        load_universe_config({"dexes": ["xyz"], "legs": {"a": {"label": "A", "markets": ["x"]},
-                                                         "b": {"label": "B", "markets": ["x"]}}})
+        load_universe_config(
+            {"dexes": ["xyz"], "legs": {"a": {"label": "A", "markets": ["x"]}, "b": {"label": "B", "markets": ["x"]}}}
+        )
 
 
 def test_match_coins():

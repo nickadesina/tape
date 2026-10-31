@@ -1,0 +1,115 @@
+/* One column, monospace, no dark mode, nothing that moves. */
+:root {
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  background: #fff;
+  color: #000;
+  font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+main,
+header,
+footer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 12px;
+}
+header {
+  padding-top: 12px;
+}
+header nav a {
+  margin-right: 1.5ch;
+}
+a {
+  color: #0000ee;
+}
+a:visited {
+  color: #551a8b;
+}
+h1 {
+  font-size: 18px;
+  margin: 16px 0 4px;
+}
+h2 {
+  font-size: 15px;
+  margin: 24px 0 6px;
+}
+p {
+  margin: 6px 0;
+}
+figure {
+  margin: 12px 0;
+}
+figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid #bfbfbf;
+}
+figcaption {
+  font-size: 12px;
+  margin-top: 4px;
+}
+figcaption > * {
+  margin-right: 2ch;
+}
+button {
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+th,
+td {
+  text-align: left;
+  padding: 2px 8px 2px 0;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: nowrap;
+}
+td.n,
+th.n {
+  text-align: right;
+}
+.scroll {
+  overflow-x: auto;
+}
+.notice {
+  border: 1px solid #c00;
+  color: #c00;
+  padding: 4px 8px;
+  margin: 12px 0;
+}
+.dim {
+  color: #595959;
+}
+.neg {
+  color: #c0504d;
+}
+.pos {
+  color: #2c7a2c;
+}
+footer {
+  margin-top: 32px;
+  padding-bottom: 24px;
+  font-size: 12px;
+  color: #595959;
+}
+pre,
+code {
+  font: inherit;
+}
+pre {
+  white-space: pre-wrap;
+  background: #f4f4f4;
+  padding: 6px 8px;
+}

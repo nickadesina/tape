@@ -31,9 +31,21 @@ COMPLEX = "complex"
 HOURS_PER_YEAR = 24 * 365
 
 METRICS = (
-    "whale_net", "whale_net_change", "mid_net", "small_net", "bot_net",
-    "fresh_share", "crowding", "coverage", "imbalance",
-    "funding", "funding_ann", "premium_bps", "liq_share", "oi_usd", "mark",
+    "whale_net",
+    "whale_net_change",
+    "mid_net",
+    "small_net",
+    "bot_net",
+    "fresh_share",
+    "crowding",
+    "coverage",
+    "imbalance",
+    "funding",
+    "funding_ann",
+    "premium_bps",
+    "liq_share",
+    "oi_usd",
+    "mark",
 )
 
 
@@ -88,7 +100,7 @@ class HourInputs:
     whales: set[str]
     bots: set[str]
     fresh: set[str]
-    liq_usd: dict[str, float]          # coin -> liquidated notional in the hour
+    liq_usd: dict[str, float]  # coin -> liquidated notional in the hour
     whale_net_24h_ago: dict[str, float]  # subject -> whale net 24h before this hour
     rules: CohortRules
     crowding_top_n: int = 5
@@ -198,7 +210,11 @@ def top_positions(inp: HourInputs, n: int = 50) -> list[TopPosition]:
         for i, p in enumerate(ps[:n], start=1):
             out.append(
                 TopPosition(
-                    coin=coin, rank=i, address=p.address, size=p.size, notional=abs(p.size) * mark,
+                    coin=coin,
+                    rank=i,
+                    address=p.address,
+                    size=p.size,
+                    notional=abs(p.size) * mark,
                     cohort=cohort_of(p.address, gross_all.get(p.address, 0.0), inp.whales, inp.bots, inp.rules),
                     fresh=p.address in inp.fresh,
                 )

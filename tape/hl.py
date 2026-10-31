@@ -24,9 +24,19 @@ log = logging.getLogger(__name__)
 
 LIGHT = {"clearinghouseState", "allMids", "l2Book", "orderStatus", "spotClearinghouseState", "exchangeStatus"}
 PER_ITEM_20 = {
-    "recentTrades", "historicalOrders", "userFills", "userFillsByTime", "fundingHistory",
-    "userFunding", "nonUserFundingUpdates", "twapHistory", "userTwapSliceFills",
-    "userTwapSliceFillsByTime", "delegatorHistory", "delegatorRewards", "validatorStats",
+    "recentTrades",
+    "historicalOrders",
+    "userFills",
+    "userFillsByTime",
+    "fundingHistory",
+    "userFunding",
+    "nonUserFundingUpdates",
+    "twapHistory",
+    "userTwapSliceFills",
+    "userTwapSliceFillsByTime",
+    "delegatorHistory",
+    "delegatorRewards",
+    "validatorStats",
 }
 
 HIGH = 0

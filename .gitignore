@@ -9,3 +9,4 @@ site/node_modules/
 site/.next/
 site/.env.local
 site/next-env.d.ts
+site/tsconfig.tsbuildinfo
