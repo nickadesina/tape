@@ -1,5 +1,8 @@
 """The worker's HTTP entrypoint on Vercel: a bare ASGI app (no framework).
 
+Vercel maps each api/<name>.py file to /api/<name>; every one of them exports
+this app, which routes on the path.
+
 Vercel Cron calls the job paths with `Authorization: Bearer $CRON_SECRET`;
 every path but /api/health requires it.
 

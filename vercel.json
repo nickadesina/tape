@@ -1,16 +1,28 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "tape/web.py": {
+    "api/*.py": {
       "maxDuration": 800,
       "memory": 1024,
       "excludeFiles": "{site/**,tests/**,deploy/**,docs/**,.github/**,var/**}"
     }
   },
   "crons": [
-    { "path": "/api/shift", "schedule": "*/10 * * * *" },
-    { "path": "/api/sweep", "schedule": "0,15,30,45 * * * *" },
-    { "path": "/api/daily", "schedule": "0 20 * * *" },
-    { "path": "/api/daily", "schedule": "0 21 * * *" }
+    {
+      "path": "/api/shift",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/sweep",
+      "schedule": "0,15,30,45 * * * *"
+    },
+    {
+      "path": "/api/daily",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/daily",
+      "schedule": "0 21 * * *"
+    }
   ]
 }

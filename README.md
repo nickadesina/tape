@@ -72,7 +72,7 @@ The tape runs on Vercel as two projects from this repo, both on Neon `tape-db` (
 | Project | Root | What |
 |---|---|---|
 | `tape` | `site/` | The public site. |
-| `tape-worker` | `.` | The pipeline as Vercel Cron functions (`vercel.json`, `tape/web.py`, `tape/worker.py`). |
+| `tape-worker` | `.` | The pipeline as Vercel Cron functions (`vercel.json`, `api/*.py` → `tape/web.py` → `tape/worker.py`). |
 
 Vercel functions stop after 800 s, so the worker cuts the always-on indexer into pieces:
 
