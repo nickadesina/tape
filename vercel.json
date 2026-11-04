@@ -3,7 +3,6 @@
   "functions": {
     "api/*.py": {
       "maxDuration": 800,
-      "memory": 1024,
       "excludeFiles": "{site/**,tests/**,deploy/**,docs/**,.github/**,var/**}"
     }
   },
