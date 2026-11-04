@@ -106,6 +106,25 @@ Over the first 40 minutes, the bot rule (over 200 fills a day, median hold under
 Over a window that short, any active trader both trades often and closes quickly. Bot classification now waits until
 the tape has watched fills for `bot_min_observed_days` (1). Until then, nobody is a bot.
 
+## Running on Vercel instead of the box
+
+The doc puts the indexer on the Lightsail box. It now runs on Vercel (README, Deploy), which cannot hold a process
+open: a function stops after 800 s. What changed, and what it costs in fidelity:
+
+- **The WebSocket is held by overlapping shifts.** A shift starts every 10 minutes and lasts 11.5. If a shift
+  fails to start, the next one sees the gap and backfills from `userFillsByTime`, which is slow (20 weight per
+  address) and bounded by the shift's length, so a long outage leaves a hole in `fills`. Positions are unaffected;
+  they come from the sweep.
+- **Running positions restart each shift** from the last sweep plus the fills since it finished. Addresses first
+  seen by an earlier shift in the same hour are not "known" again until the next sweep, so a real-time flip or entry
+  alert for a brand-new address can wait up to an hour; the hourly snapshot events still catch it.
+- **The sweep is resumable.** It is committed in chunks of 200 pairs and continues on the next call, so it is no
+  longer bounded by one function. A sweep that spans two calls is a snapshot taken over up to 20 minutes rather than
+  a few; one that is never finished is closed when the next hour's starts, at whatever coverage it reached.
+- **Two functions share the rate limit.** Each has its own bucket. While a sweep runs, the sweep takes 75% of the
+  budget and the shift the rest. Vercel's outbound IPs are shared with other tenants, so occasional 429s are
+  expected; the client backs off and retries.
+
 ## Not built, on purpose
 
 The doc's out-of-scope list holds: no trade button, no accounts, no leaderboard, no launch. Two things are also left

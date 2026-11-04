@@ -73,6 +73,15 @@ class WeightBucket:
         self.updated = clock()
         self._lock = asyncio.Lock()
 
+    def set_rate(self, per_minute: float, low_reserve: float | None = None) -> None:
+        """Change the budget in place (a Vercel shift yields to a running sweep)."""
+        self._refill()
+        reserve = self.low_floor / self.capacity if low_reserve is None else low_reserve
+        self.capacity = float(per_minute)
+        self.rate = per_minute / 60.0
+        self.low_floor = self.capacity * reserve
+        self.tokens = min(self.tokens, self.capacity)
+
     def _refill(self) -> None:
         now = self.clock()
         self.tokens = min(self.capacity, self.tokens + (now - self.updated) * self.rate)

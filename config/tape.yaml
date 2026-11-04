@@ -54,6 +54,19 @@ indexer:
   liq_px_band: 0.01              # a reducing fill within 1% of the snapshot liquidation price is a liquidation candidate
   universe_refresh_s: 21600
 
+vercel:
+  # Shifts start every 10 minutes (vercel.json) and last longer than that, so
+  # one always holds the WebSocket. Background loops stop overlap_s early.
+  shift_s: 690
+  shift_overlap_s: 90
+  # The sweep function gets this share of the info budget; a shift running
+  # alongside it drops to the rest.
+  sweep_budget_share: 0.75
+  # A sweep invocation stops sweeping this many seconds after it starts, to
+  # leave time for metrics and charts inside maxDuration (800 s).
+  sweep_stop_s: 540
+  metrics_min_s: 200   # run metrics in the same invocation only with this much time left
+
 render:
   width_px: 1200
   height_px: 675

@@ -67,7 +67,35 @@ these, plus a typecheck and build of the site.
 
 ## Deploy
 
-**Box (Lightsail):** clone, then `sudo deploy/install.sh`. It creates the `tape` user, installs into `/opt/tape`,
+The tape runs on Vercel as two projects from this repo, both on Neon `tape-db` (Vercel Storage):
+
+| Project | Root | What |
+|---|---|---|
+| `tape` | `site/` | The public site. |
+| `tape-worker` | `.` | The pipeline as Vercel Cron functions (`vercel.json`, `tape/web.py`, `tape/worker.py`). |
+
+Vercel functions stop after 800 s, so the worker cuts the always-on indexer into pieces:
+
+- **`/api/shift`, every 10 minutes:** holds the WebSocket and runs the background loops for 11.5 minutes. Consecutive
+  shifts overlap, so the trade feed always has a listener, and fills are keyed on `(coin, tid)`, so the overlap writes
+  nothing twice. A shift starts from the last sweep's positions plus the fills since.
+- **`/api/sweep`, every 15 minutes:** continues the hour's `clearinghouseState` sweep where the last call stopped
+  (progress is committed per 200 pairs), then runs metrics and charts once the hour is done. It takes 75% of the info
+  budget; a shift running alongside drops to the rest.
+- **`/api/daily`, 16:00 ET:** two UTC schedules (20:00 and 21:00) for daylight time; only the one that lands on 16:00
+  ET runs.
+- **`POST /api/task`** with `{"args": ["status"]}` runs any CLI command except `index`: `seed-leaderboard`, `metrics
+  --hour …`, `event-posted …` and so on.
+
+Every path but `/api/health` needs `Authorization: Bearer $CRON_SECRET`; Vercel Cron sends it. Worker environment:
+`CRON_SECRET`, the Neon variables (the worker uses `DATABASE_URL_UNPOOLED`, since advisory locks and COPY need a
+direct session), `SITE_URL`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -d '{"args":["status"]}' https://tape-worker-<team>.vercel.app/api/task
+```
+
+**Box, instead of the worker:** the same code runs as one long process. Clone, then `sudo deploy/install.sh`. It creates the `tape` user, installs into `/opt/tape`,
 copies `deploy/tape.env.example` to `/etc/tape/tape.env` (fill it in and re-run), migrates, and enables:
 
 - `tape-indexer.service`: always on. It launches the metrics job after every sweep.

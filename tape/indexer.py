@@ -14,6 +14,11 @@ Loops, all in one process:
   alerts     send pending event alerts to Telegram
   refresh    re-read the universe and the whale set on a schedule
 
+On a box, `tape index` runs all of them forever (`run`). On Vercel, where a
+function stops after maxDuration, the same loops run as overlapping shifts
+(`run_shift`) and the sweep runs as its own resumable function (`sweep_step`);
+see tape/worker.py.
+
 Positions are never reconstructed from fills: fills only move the running
 position between snapshots so real-time alerts fire; the next sweep replaces
 the running position with the exact one.
@@ -48,6 +53,13 @@ WS_PING_S = 30
 SWEEP_CONCURRENCY = 8
 BACKGROUND_CONCURRENCY = 4
 HISTORY_PAGES = 3
+SWEEP_CHUNK = 200
+SWEEP_LOCK = 0x7A9E_0002  # advisory lock id: one sweeper at a time
+
+
+def _clock() -> float:
+    """time.monotonic, behind a name tests can replace."""
+    return time.monotonic()
 
 
 class Indexer:
@@ -78,6 +90,8 @@ class Indexer:
         self.alerts_from: datetime | None = None
 
         self.last_msg_ms: int | None = None
+        self.writing = False
+        self.bg_tasks: list[asyncio.Task] = []
         self.resubscribe = asyncio.Event()
         self.stats = defaultdict(int)
 
@@ -135,7 +149,21 @@ class Indexer:
             swept = await self.q("select address, dex from address_dexes where first_swept_hour <= %s", (hour,))
             for r in swept:
                 self.known[r["dex"]].add(r["address"])
-            log.info("running positions from sweep %s: %d positions, %d known", hour, len(snaps), len(swept))
+            # Fills since the sweep finished move the running positions on, so a
+            # process that starts mid-hour (a Vercel shift) does not start an hour stale.
+            moved = await self.q("select coin, buyer, seller, sz from fills where time > %s", (last[0]["finished_at"],))
+            for f in moved:
+                if f["buyer"]:
+                    self.positions[(f["buyer"], f["coin"])] += f["sz"]
+                if f["seller"]:
+                    self.positions[(f["seller"], f["coin"])] -= f["sz"]
+            log.info(
+                "running positions from sweep %s: %d positions, %d known, %d fills replayed",
+                hour,
+                len(snaps),
+                len(swept),
+                len(moved),
+            )
         await self.refresh_whales()
         mx = await self.q("select max(time) as t from fills where source = 'ws'")
         if mx and mx[0]["t"]:
@@ -192,7 +220,7 @@ class Indexer:
         if self.last_msg_ms and now - self.last_msg_ms > gap_s * 1000:
             start = max(self.last_msg_ms, now - 24 * 3600 * 1000)
             log.warning("ws gap of %.0fs; backfilling from userFillsByTime", (now - self.last_msg_ms) / 1000)
-            asyncio.create_task(self.backfill(start, now))
+            self.bg_tasks.append(asyncio.create_task(self.backfill(start, now)))
 
     def on_message(self, msg: dict) -> None:
         if msg.get("channel") != "trades":
@@ -244,7 +272,9 @@ class Indexer:
 
     async def writer_loop(self) -> None:
         while True:
+            self.writing = False
             batch = [await self.fill_q.get()]
+            self.writing = True
             while len(batch) < 5000:
                 try:
                     batch.append(self.fill_q.get_nowait())
@@ -261,8 +291,10 @@ class Indexer:
             while not self.event_q.empty():
                 evs.append(self.event_q.get_nowait())
             if evs:
-                async with self.db_lock:
-                    await insert_events_async(self.db, evs)
+                # The writer's own connection: a shift cancels the background loops
+                # mid-query at its end, which can leave the shared connection unusable.
+                await insert_events_async(self.wdb, evs)
+            self.writing = False
             await asyncio.sleep(1)
 
     async def write_fills(self, batch: list[Fill]) -> None:
@@ -273,6 +305,9 @@ class Indexer:
                 if a:
                     k = (a, dex)
                     last_by_addr_dex[k] = max(last_by_addr_dex.get(k, f.time), f.time)
+        # Two overlapping shifts upsert the same address rows; a fixed order keeps
+        # them from deadlocking.
+        last_by_addr_dex = dict(sorted(last_by_addr_dex.items()))
         async with self.wdb.cursor() as cur:
             await cur.executemany(
                 """insert into fills (coin, tid, time, px, sz, side, buyer, seller, hash, source)
@@ -281,7 +316,10 @@ class Indexer:
                      buyer = coalesce(fills.buyer, excluded.buyer),
                      seller = coalesce(fills.seller, excluded.seller),
                      side = coalesce(fills.side, excluded.side)""",
-                [(f.coin, f.tid, f.time, f.px, f.sz, f.side, f.buyer, f.seller, f.hash, f.source) for f in batch],
+                [
+                    (f.coin, f.tid, f.time, f.px, f.sz, f.side, f.buyer, f.seller, f.hash, f.source)
+                    for f in sorted(batch, key=lambda f: (f.coin, f.tid))
+                ],
             )
             by_addr: dict[str, datetime] = {}
             for (a, _), t in last_by_addr_dex.items():
@@ -357,24 +395,71 @@ class Indexer:
             nxt = hour + timedelta(hours=1, seconds=offset)
             await asyncio.sleep(max(1.0, (nxt - utcnow()).total_seconds()))
 
-    async def sweep_set(self) -> list[tuple[str, str]]:
+    async def sweep_set(self, unswept_hour: datetime | None = None) -> list[tuple[str, str]]:
+        """Address-dex pairs to sweep; with `unswept_hour`, only those not yet swept for that hour."""
         days = float(self.s.t("indexer", "inactive_days"))
         cutoff = utcnow() - timedelta(days=days)
         rows = await self.q(
             """select address, dex from address_dexes
-               where not seed_pending and (last_fill >= %s or last_position_hour >= %s)""",
-            (cutoff, cutoff),
+               where not seed_pending and (last_fill >= %s or last_position_hour >= %s)
+                 and (%s::timestamptz is null or swept_hour is distinct from %s::timestamptz)""",
+            (cutoff, cutoff, unswept_hour, unswept_hour),
         )
         dexes = set(self.universe.dexes)
         return [(r["address"], r["dex"]) for r in rows if r["dex"] in dexes]
 
     async def sweep(self, hour: datetime) -> None:
-        started = utcnow()
+        """The whole sweep in one go (the box)."""
+        while await self.sweep_step(hour, deadline=None) is False:
+            pass
+
+    async def sweep_step(self, hour: datetime, deadline: float | None) -> bool | None:
+        """Sweep `hour` until it is finished or `deadline` (a time.monotonic() value) is
+        near. Resumable: progress is committed per chunk, so the next call
+        takes only the pairs not yet swept. True when the hour is finished,
+        False when stopped for time, None when another process holds the sweep."""
+        got = await self.q("select pg_try_advisory_lock(%s) as ok", (SWEEP_LOCK,))
+        if not got[0]["ok"]:
+            log.info("another process is sweeping; leaving it")
+            return None
+        try:
+            return await self._sweep_step(hour, deadline)
+        finally:
+            await self.q("select pg_advisory_unlock(%s)", (SWEEP_LOCK,))
+
+    async def _sweep_step(self, hour: datetime, deadline: float | None) -> bool:
+        row = await self.q("select started_at, finished_at from sweeps where hour = %s", (hour,))
+        if row and row[0]["finished_at"]:
+            return True
+        if not row:
+            await self.start_sweep(hour)
+        targets = await self.sweep_set(unswept_hour=hour)
+        log.info("sweep %s: %d address-dex pairs to go", hour.isoformat(), len(targets))
+        for i in range(0, len(targets), SWEEP_CHUNK):
+            # A chunk takes SWEEP_CHUNK * 2 weight; leave time to write it.
+            need = SWEEP_CHUNK * 2 / self.bucket.rate + 20
+            if deadline is not None and _clock() + need > deadline:
+                log.info("sweep %s: stopping for time with %d pairs left", hour.isoformat(), len(targets) - i)
+                return False
+            await self.sweep_chunk(hour, targets[i : i + SWEEP_CHUNK])
+        await self.finish_sweep(hour)
+        return True
+
+    async def start_sweep(self, hour: datetime) -> None:
+        # A sweep that never finished (its invocations failed) is closed as it
+        # stands; metrics then computes it at whatever coverage it reached.
+        await self.q(
+            "update sweeps set finished_at = now() where finished_at is null and hour < %s",
+            (hour,),
+        )
         async with self.db_lock:
             await self.db.execute(
-                "insert into sweeps (hour, started_at) values (%s, %s) on conflict (hour) do update set started_at = excluded.started_at",
-                (hour, started),
+                """insert into sweeps (hour, started_at, addresses, requests, positions, errors)
+                   values (%s, %s, 0, 0, 0, 0)
+                   on conflict (hour) do update set started_at = excluded.started_at""",
+                (hour, utcnow()),
             )
+            await self.db.execute("delete from snapshots where hour = %s", (hour,))
         ctx_rows = []
         for dex in self.universe.dexes:
             meta, ctxs = await self.info.meta_and_ctxs(dex)
@@ -404,8 +489,7 @@ class Indexer:
                 ctx_rows,
             )
 
-        targets = await self.sweep_set()
-        log.info("sweep %s: %d address-dex pairs", hour.isoformat(), len(targets))
+    async def sweep_chunk(self, hour: datetime, targets: list[tuple[str, str]]) -> None:
         sem = asyncio.Semaphore(SWEEP_CONCURRENCY)
         snap_rows: list[tuple] = []
         with_pos: list[tuple[str, str]] = []
@@ -430,13 +514,19 @@ class Indexer:
                 snap_rows.append((hour, coin, addr, size, entry, lev, liq))
 
         await asyncio.gather(*(one(a, d) for a, d in targets))
-        async with self.db_lock, self.db.cursor() as cur:
-            await cur.execute("delete from snapshots where hour = %s", (hour,))
+        # One transaction per chunk: snapshots and the swept marks land together.
+        async with self.db_lock, self.db.transaction(), self.db.cursor() as cur:
             async with cur.copy(
                 "copy snapshots (hour, coin, address, size, entry_px, leverage, liq_px) from stdin"
             ) as cp:
                 for r in snap_rows:
                     await cp.write_row(r)
+            # Failed pairs are marked too, so a resumed sweep does not retry them forever;
+            # they count as errors and lower the hour's coverage.
+            await cur.executemany(
+                "update address_dexes set swept_hour = %s where address = %s and dex = %s",
+                [(hour, a, d) for a, d in targets],
+            )
             await cur.executemany(
                 "update address_dexes set first_swept_hour = coalesce(first_swept_hour, %s) where address = %s and dex = %s",
                 [(hour, a, d) for a, d in swept],
@@ -446,20 +536,28 @@ class Indexer:
                 [(hour, a, d) for a, d in with_pos],
             )
             await cur.execute(
-                """update sweeps set finished_at = now(), addresses = %s, requests = %s, positions = %s, errors = %s
-                   where hour = %s""",
+                """update sweeps set addresses = addresses + %s, requests = requests + %s,
+                     positions = positions + %s, errors = errors + %s where hour = %s""",
                 (len(swept), len(targets), len(snap_rows), errors, hour),
             )
+
+    async def finish_sweep(self, hour: datetime) -> None:
+        r = await self.q(
+            """update sweeps set finished_at = now() where hour = %s
+               returning started_at, finished_at, addresses, positions, errors""",
+            (hour,),
+        )
         if self.alerts_from is None:
             self.alerts_from = utcnow() + timedelta(hours=float(self.s.t("events", "warmup_hours")))
-        log.info(
-            "sweep %s done in %.0fs: %d swept, %d positions, %d errors",
-            hour.isoformat(),
-            (utcnow() - started).total_seconds(),
-            len(swept),
-            len(snap_rows),
-            errors,
-        )
+        if r:
+            log.info(
+                "sweep %s done in %.0fs: %d swept, %d positions, %d errors",
+                hour.isoformat(),
+                (r[0]["finished_at"] - r[0]["started_at"]).total_seconds(),
+                r[0]["addresses"],
+                r[0]["positions"],
+                r[0]["errors"],
+            )
 
     def launch_metrics(self) -> None:
         if os.environ.get("TAPE_METRICS_AFTER_SWEEP", "1") != "1":
@@ -622,6 +720,62 @@ class Indexer:
                 self.fill_q.qsize(),
                 self.bucket.capacity,
             )
+
+    async def throttle_loop(self, full: float, during_sweep: float) -> None:
+        """A shift and a sweep run as separate functions with separate buckets;
+        while a sweep runs, the shift drops to its share of the budget."""
+        while True:
+            r = await self.q(
+                """select 1 from sweeps where finished_at is null
+                     and started_at > now() - interval '45 minutes' limit 1"""
+            )
+            want = during_sweep if r else full
+            if abs(self.bucket.capacity - want) > 1e-6:
+                self.bucket.set_rate(want)
+                log.info("info budget now %.0f/min (%s)", want, "sweep running" if r else "no sweep")
+            await asyncio.sleep(15)
+
+    async def run_shift(self, seconds: float, overlap: float, budget: float, sweep_budget: float) -> dict:
+        """One Vercel shift: the WebSocket and the background loops for
+        `seconds`, then drain the fill queue and return. Shifts are scheduled
+        closer together than they last, so the WebSocket is always held by at
+        least one of them; background loops stop `overlap` early so two shifts
+        do not work the same queues."""
+        t0 = time.monotonic()
+        await self.load_universe()
+        await self.load_state()
+        ws = asyncio.create_task(self.ws_loop())
+        writer = asyncio.create_task(self.writer_loop())
+        self.bg_tasks += [
+            asyncio.create_task(c)
+            for c in (
+                self.discover_loop(),
+                self.history_loop(),
+                self.seed_loop(),
+                self.liq_loop(),
+                self.alerts_loop(),
+                self.refresh_loop(),
+                self.throttle_loop(budget, budget - sweep_budget),
+            )
+        ]
+        await asyncio.sleep(max(0.0, t0 + seconds - overlap - time.monotonic()))
+        for t in self.bg_tasks:
+            t.cancel()
+        await asyncio.gather(*self.bg_tasks, return_exceptions=True)
+        await asyncio.sleep(max(0.0, t0 + seconds - time.monotonic()))
+        ws.cancel()
+        await asyncio.gather(ws, return_exceptions=True)
+        drain_until = time.monotonic() + 30
+        while (not self.fill_q.empty() or self.writing) and time.monotonic() < drain_until:
+            await asyncio.sleep(0.25)
+        writer.cancel()
+        await asyncio.gather(writer, return_exceptions=True)
+        out = dict(self.stats)
+        out.update(
+            left_in_queue=self.fill_q.qsize(), seconds=round(time.monotonic() - t0), weight=self.info.weight_spent
+        )
+        log.info("shift done: %s", out)
+        return out
 
     async def run(self) -> None:
         await self.load_universe()

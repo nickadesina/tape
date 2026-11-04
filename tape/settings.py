@@ -96,7 +96,10 @@ def load_universe_config(raw: dict[str, Any] | None = None) -> UniverseConfig:
 
 def load_env() -> Env:
     return Env(
-        database_url=os.environ.get("DATABASE_URL", "postgresql://tape:tape@localhost/tape"),
+        # Advisory locks and COPY need a direct session, so the unpooled URL the
+        # Neon integration sets on Vercel wins over the pooled DATABASE_URL.
+        database_url=os.environ.get("DATABASE_URL_UNPOOLED")
+        or os.environ.get("DATABASE_URL", "postgresql://tape:tape@localhost/tape"),
         telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN") or None,
         telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID") or None,
         site_url=os.environ.get("SITE_URL", "https://openmarket.systems/tape").rstrip("/"),
