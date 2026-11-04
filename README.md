@@ -103,7 +103,8 @@ copies `deploy/tape.env.example` to `/etc/tape/tape.env` (fill it in and re-run)
   post-sweep run.
 - `tape-daily.timer`: 16:00 America/New_York, every day.
 
-**Database:** the Neon project OpenMarket already uses, as a new database (`tape`). The box uses the direct
+**Database:** `tape-db`, a Neon database created from Vercel Storage and attached to both projects, so Vercel sets
+its connection variables and bills it. It is separate from OpenMarket's databases. The worker (or box) uses the direct
 connection; the site uses the pooled one.
 
 **Site (Vercel):** a new project with root directory `site/`. Environment:
@@ -111,12 +112,12 @@ connection; the site uses the pooled one.
 | Var | |
 |---|---|
 | `DATABASE_URL` | Neon pooled connection string. |
-| `SITE_URL` | `https://openmarket.systems/tape` |
-| `BASE_PATH` | `/tape` while it lives under openmarket.systems; unset on its own domain. |
+| `SITE_URL` | `https://tape-nick-21c4.vercel.app` (or a custom domain added to the project). |
+| `BASE_PATH` | Unset. Set it (e.g. `/tape`) only to serve the site under a path behind another site's rewrite. |
 | `S3_PUBLIC_BASE` | Only with `CHART_STORE=s3` on the box. |
 
-To serve it at `openmarket.systems/tape`, add a rewrite in the OpenMarket project: `/tape/:path*` →
-`https://<tape-project>.vercel.app/tape/:path*`. A dedicated domain later is just `SITE_URL` with `BASE_PATH` unset.
+The site is standalone at `https://tape-nick-21c4.vercel.app`. A custom domain later is a domain added to the `tape`
+project plus `SITE_URL` on both projects.
 
 **Charts** default to `CHART_STORE=db`: PNG bytes in the `charts` table, pruned so a small Neon plan holds them.
 Daily, event, and daily-hour charts are kept forever; other hourly cards are kept 30 days and market panels 2

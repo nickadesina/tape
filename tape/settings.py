@@ -102,7 +102,7 @@ def load_env() -> Env:
         or os.environ.get("DATABASE_URL", "postgresql://tape:tape@localhost/tape"),
         telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN") or None,
         telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID") or None,
-        site_url=os.environ.get("SITE_URL", "https://openmarket.systems/tape").rstrip("/"),
+        site_url=os.environ.get("SITE_URL", "http://localhost:3000").rstrip("/"),
         chart_store=os.environ.get("CHART_STORE", "db"),
         chart_dir=Path(os.environ.get("CHART_DIR", ROOT / "var" / "charts")),
         s3_bucket=os.environ.get("S3_BUCKET") or None,
