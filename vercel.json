@@ -3,7 +3,7 @@
   "functions": {
     "api/*.py": {
       "maxDuration": 800,
-      "excludeFiles": "{site/**,tests/**,deploy/**,docs/**,.github/**,var/**}"
+      "excludeFiles": "{site/**,tests/**,deploy/**,docs/**,research/**,.github/**,var/**}"
     }
   },
   "crons": [

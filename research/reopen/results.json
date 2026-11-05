@@ -1,0 +1,354 @@
+{
+ "generated": "2026-11-05T01:40+00:00",
+ "asia": {
+  "xyz:SKHX": {
+   "label": "SK hynix",
+   "proxy": "SK hynix ADS",
+   "n": 137,
+   "share_priced": 0.7249144676953588,
+   "beta": 0.95544773877688,
+   "corr": 0.864226990961523,
+   "hit_rate_big_gaps": 0.8839285714285714,
+   "n_big_gaps": 112,
+   "mean_abs_gap": 0.033509717225660506,
+   "mean_abs_miss": 0.01627655791407834,
+   "baseline": {
+    "n": 78,
+    "proxy_beta": 0.7823077704797227,
+    "proxy_share": 0.6764829165432316,
+    "hl_share_same_days": 0.7925497663432698,
+    "proxy_plus_hl_share": 0.7998630713225467
+   },
+   "from_official_close": {
+    "n": 137,
+    "share_priced": 0.7125909023904019,
+    "beta": 0.9189047779705967,
+    "corr": 0.8476492673146362,
+    "hit_rate_big_gaps": 0.9056603773584906,
+    "n_big_gaps": 106,
+    "mean_abs_gap": 0.03476803734946587,
+    "mean_abs_miss": 0.01785111400417172
+   },
+   "close_check": {
+    "n": 137,
+    "median_abs_diff": 0.006178690029515594,
+    "p90_abs_diff": 0.01778891171323934
+   },
+   "from": "2026-04-14",
+   "to": "2026-11-05"
+  },
+  "xyz:SMSN": {
+   "label": "Samsung",
+   "proxy": "Micron",
+   "n": 137,
+   "share_priced": 0.7232568379160377,
+   "beta": 0.9118301428558362,
+   "corr": 0.8610798481340506,
+   "hit_rate_big_gaps": 0.8787878787878788,
+   "n_big_gaps": 99,
+   "mean_abs_gap": 0.02749752164331167,
+   "mean_abs_miss": 0.014502036699159913,
+   "baseline": {
+    "n": 137,
+    "proxy_beta": 0.5916369472656232,
+    "proxy_share": 0.5740304066277173,
+    "hl_share_same_days": 0.7232568379160377,
+    "proxy_plus_hl_share": 0.7339997944718086
+   },
+   "from_official_close": {
+    "n": 137,
+    "share_priced": 0.715862302027,
+    "beta": 0.8811820661101976,
+    "corr": 0.854979137115376,
+    "hit_rate_big_gaps": 0.89,
+    "n_big_gaps": 100,
+    "mean_abs_gap": 0.029937832791882196,
+    "mean_abs_miss": 0.0161506778357171
+   },
+   "close_check": {
+    "n": 137,
+    "median_abs_diff": 0.003957164912684331,
+    "p90_abs_diff": 0.013676888028416863
+   },
+   "from": "2026-04-14",
+   "to": "2026-11-05"
+  },
+  "xyz:KIOXIA": {
+   "label": "Kioxia",
+   "proxy": "Sandisk",
+   "n": 25,
+   "share_priced": 0.6922632524822806,
+   "beta": 0.8697912015514576,
+   "corr": 0.8275257122606816,
+   "hit_rate_big_gaps": 0.7777777777777778,
+   "n_big_gaps": 18,
+   "mean_abs_gap": 0.02798342914341134,
+   "mean_abs_miss": 0.016063876979288235,
+   "baseline": {
+    "n": 25,
+    "proxy_beta": 0.8901017333114812,
+    "proxy_share": 0.7876306841214854,
+    "hl_share_same_days": 0.6922632524822806,
+    "proxy_plus_hl_share": 0.7932788457593162
+   },
+   "from_official_close": {
+    "n": 25,
+    "share_priced": 0.8319082406463824,
+    "beta": 0.9033538653138335,
+    "corr": 0.9118878293764198,
+    "hit_rate_big_gaps": 0.8636363636363636,
+    "n_big_gaps": 22,
+    "mean_abs_gap": 0.038908391507245024,
+    "mean_abs_miss": 0.01573489616731556
+   },
+   "close_check": {
+    "n": 25,
+    "median_abs_diff": 0.002174529598564206,
+    "p90_abs_diff": 0.008154668887996134
+   },
+   "from": "2026-09-30",
+   "to": "2026-11-05"
+  },
+  "xyz:CXMT": {
+   "label": "CXMT",
+   "proxy": "Micron",
+   "n": 66,
+   "share_priced": 0.5417331398118832,
+   "beta": 0.8484745353857807,
+   "corr": 0.7539163241776248,
+   "hit_rate_big_gaps": 0.7755102040816326,
+   "n_big_gaps": 49,
+   "mean_abs_gap": 0.02292118337628768,
+   "mean_abs_miss": 0.0160693209582644,
+   "baseline": {
+    "n": 66,
+    "proxy_beta": 0.4773402983449408,
+    "proxy_share": 0.48957454917923915,
+    "hl_share_same_days": 0.5417331398118832,
+    "proxy_plus_hl_share": 0.5787440284864426
+   },
+   "from_official_close": {
+    "n": 66,
+    "share_priced": 0.6252498976548863,
+    "beta": 0.7513890348613786,
+    "corr": 0.8516493350541665,
+    "hit_rate_big_gaps": 0.9230769230769231,
+    "n_big_gaps": 39,
+    "mean_abs_gap": 0.01802215160611852,
+    "mean_abs_miss": 0.01145977588115218
+   },
+   "close_check": {
+    "n": 66,
+    "median_abs_diff": 0.006817505305545818,
+    "p90_abs_diff": 0.030707754965235024
+   },
+   "from": "2026-07-28",
+   "to": "2026-11-04"
+  },
+  "xyz:MINIMAX": {
+   "label": "MiniMax",
+   "proxy": null,
+   "n": 95,
+   "share_priced": 0.5344120035143788,
+   "beta": 0.7967323244091411,
+   "corr": 0.7537686747730765,
+   "hit_rate_big_gaps": 0.7972972972972973,
+   "n_big_gaps": 74,
+   "mean_abs_gap": 0.025462433357714174,
+   "mean_abs_miss": 0.01696154943452021,
+   "baseline": {
+    "n": 0
+   },
+   "from_official_close": {
+    "n": 95,
+    "share_priced": 0.4235337903323072,
+    "beta": 0.7089115117426102,
+    "corr": 0.7101922919227336,
+    "hit_rate_big_gaps": 0.8028169014084507,
+    "n_big_gaps": 71,
+    "mean_abs_gap": 0.02348634032966617,
+    "mean_abs_miss": 0.017512356128890044
+   },
+   "close_check": {
+    "n": 95,
+    "median_abs_diff": 0.003526054697975482,
+    "p90_abs_diff": 0.014230312908479073
+   },
+   "from": "2026-06-22",
+   "to": "2026-11-04"
+  },
+  "xyz:ZHIPU": {
+   "label": "Zhipu",
+   "proxy": null,
+   "n": 94,
+   "share_priced": 0.4316097613701947,
+   "beta": 0.7149518426778427,
+   "corr": 0.7151174260463495,
+   "hit_rate_big_gaps": 0.8805970149253731,
+   "n_big_gaps": 67,
+   "mean_abs_gap": 0.02672382136155835,
+   "mean_abs_miss": 0.01859938204319339,
+   "baseline": {
+    "n": 0
+   },
+   "from_official_close": {
+    "n": 94,
+    "share_priced": 0.3582494652327942,
+    "beta": 0.6795689904782932,
+    "corr": 0.6775914250085049,
+    "hit_rate_big_gaps": 0.8823529411764706,
+    "n_big_gaps": 68,
+    "mean_abs_gap": 0.02683161711445107,
+    "mean_abs_miss": 0.0189615979622565
+   },
+   "close_check": {
+    "n": 94,
+    "median_abs_diff": 0.0033565208452050687,
+    "p90_abs_diff": 0.01105173230363517
+   },
+   "from": "2026-06-23",
+   "to": "2026-11-04"
+  },
+  "xyz:NCLD": {
+   "label": "Neocloud ETF",
+   "proxy": "CoreWeave",
+   "n": 62,
+   "share_priced": 0.6017652348227811,
+   "beta": 1.1240437079265044,
+   "corr": 0.8031591084960297,
+   "hit_rate_big_gaps": 0.8913043478260869,
+   "n_big_gaps": 46,
+   "mean_abs_gap": 0.025384959917999567,
+   "mean_abs_miss": 0.01632733543736103,
+   "baseline": {
+    "n": 62,
+    "proxy_beta": 0.9903966415604673,
+    "proxy_share": 0.7736293168434683,
+    "hl_share_same_days": 0.6017652348227811,
+    "proxy_plus_hl_share": 0.7736496424663607
+   },
+   "from_official_close": {
+    "n": 62,
+    "share_priced": 0.6020837767249458,
+    "beta": 1.1273416047608649,
+    "corr": 0.7987468454655382,
+    "hit_rate_big_gaps": 0.8888888888888888,
+    "n_big_gaps": 45,
+    "mean_abs_gap": 0.025456737327021303,
+    "mean_abs_miss": 0.016168012365847396
+   },
+   "close_check": {
+    "n": 62,
+    "median_abs_diff": 0.001230744330650074,
+    "p90_abs_diff": 0.0030812925332242194
+   },
+   "from": "2026-08-07",
+   "to": "2026-11-03"
+  }
+ },
+ "us_weekend": {
+  "xyz:NVDA": {
+   "n": 28,
+   "share_priced": 0.3339074232765127,
+   "beta": 0.8024920245619888,
+   "corr": 0.5324347862590799,
+   "hit_rate_big_gaps": 0.6666666666666666,
+   "n_big_gaps": 12,
+   "mean_abs_gap": 0.010882938288608115,
+   "mean_abs_miss": 0.009063614888592168
+  },
+  "xyz:MU": {
+   "n": 28,
+   "share_priced": 0.26429042596426955,
+   "beta": 0.9230168003952597,
+   "corr": 0.4640554339164659,
+   "hit_rate_big_gaps": 0.6818181818181818,
+   "n_big_gaps": 22,
+   "mean_abs_gap": 0.031635790635310065,
+   "mean_abs_miss": 0.028841882619766324
+  },
+  "xyz:SNDK": {
+   "n": 28,
+   "share_priced": 0.07217010177290606,
+   "beta": 0.641930735592369,
+   "corr": 0.28237147102780985,
+   "hit_rate_big_gaps": 0.5909090909090909,
+   "n_big_gaps": 22,
+   "mean_abs_gap": 0.029559218471798744,
+   "mean_abs_miss": 0.028178525091978733
+  },
+  "xyz:SKHY": {
+   "n": 16,
+   "share_priced": 0.0799543617036853,
+   "beta": 0.6071622368702382,
+   "corr": 0.4052474171750674,
+   "hit_rate_big_gaps": 0.5384615384615384,
+   "n_big_gaps": 13,
+   "mean_abs_gap": 0.03666251209968769,
+   "mean_abs_miss": 0.0366518790415432
+  },
+  "xyz:AMD": {
+   "n": 28,
+   "share_priced": 0.08878610211872451,
+   "beta": 0.6221139792701139,
+   "corr": 0.35369843654656186,
+   "hit_rate_big_gaps": 0.5555555555555556,
+   "n_big_gaps": 18,
+   "mean_abs_gap": 0.019683801969649823,
+   "mean_abs_miss": 0.021018076422570236
+  },
+  "xyz:AVGO": {
+   "n": 21,
+   "share_priced": 0.27119105544433986,
+   "beta": 0.9364488129446464,
+   "corr": 0.4728201815354834,
+   "hit_rate_big_gaps": 0.7272727272727273,
+   "n_big_gaps": 11,
+   "mean_abs_gap": 0.014906730654791851,
+   "mean_abs_miss": 0.011249139893541722
+  },
+  "xyz:TSM": {
+   "n": 28,
+   "share_priced": 0.05879588161765181,
+   "beta": 0.5519233519492596,
+   "corr": 0.3592718662252186,
+   "hit_rate_big_gaps": 0.8235294117647058,
+   "n_big_gaps": 17,
+   "mean_abs_gap": 0.013739589900339936,
+   "mean_abs_miss": 0.01331095746531183
+  },
+  "xyz:CRWV": {
+   "n": 28,
+   "share_priced": 0.32268914234979384,
+   "beta": 0.7901559528690623,
+   "corr": 0.5831221893612663,
+   "hit_rate_big_gaps": 0.6363636363636364,
+   "n_big_gaps": 22,
+   "mean_abs_gap": 0.023004820336968625,
+   "mean_abs_miss": 0.020140538198494908
+  },
+  "xyz:DRAM": {
+   "n": 24,
+   "share_priced": 0.22102957293962866,
+   "beta": 0.8009228634775611,
+   "corr": 0.4471686246551935,
+   "hit_rate_big_gaps": 0.6666666666666666,
+   "n_big_gaps": 21,
+   "mean_abs_gap": 0.03590231687217423,
+   "mean_abs_miss": 0.03168871898722522
+  },
+  "pooled": {
+   "n": 229,
+   "share_priced": 0.18045057966395794,
+   "beta": 0.7440810497551462,
+   "corr": 0.4236767426843311,
+   "hit_rate_big_gaps": 0.6518987341772152,
+   "n_big_gaps": 158,
+   "mean_abs_gap": 0.023403797428614505,
+   "mean_abs_miss": 0.021653676460045724
+  }
+ },
+ "dropped_not_tracking_at_close": {
+  "xyz:KIOXIA": 1
+ }
+}
