@@ -184,8 +184,18 @@ for definitional reasons; the site changelog says so.
 
 `config/graph.yaml` gives every universe market a node (the stress test shocks names, not tickers: Anthropic is
 xyz:ANT and io:ANTH together) and holds hyperscalers as counterparties without markets. Following the doc, an agent
-drafted edges from filings and reporting with a source on each; every one ships with `verified_at: null`, so none is
-loaded until a person checks it against its source. Until then the graph shocks, graph-against-market and deal
+drafted 62 edges from filings and reporting with a source on each (31 SEC filings, 22 company releases, 9 reports)
+and seven counterparty nodes (lenders, SoftBank, Cerebras). Every one ships with `verified_at: null`, so none is
+loaded until a person checks it against its source. The agent flagged the ones to check hardest in the notes: the
+$100B Nvidia-OpenAI LOI is probably superseded by the $30B February 2026 investment; Oracle-OpenAI $300B rests on
+WSJ reporting; the 34.5% SpaceX revenue share is filed but its customer is named as Anthropic only by Bloomberg;
+warrant edges run holder to issuer.
+
+A dry run with every draft treated as verified (nothing stored) exercised the engines on real closes as of the
+2026-11-04 UTC close: Anthropic's dependents are Microsoft, Google, Amazon, AMD and SpaceX at one hop and CoreWeave,
+Nebius and IREN at two; their sell-off betas to Anthropic run 0.56 (SPCX) to 1.81 (IREN), so a graph shock moves the
+neoclouds further than the lab; the SpaceX revenue-share edge shows a 14% beta against a 34.5% share, a gap at the
+29th percentile of its own short history; 54 deal moves had Hyperliquid prices on the announcement day. Until then the graph shocks, graph-against-market and deal
 studies have nothing to read and stay empty; `tape graph --drafts` lists the queue. The loader refuses the whole file
 on any malformed edge (unknown node, type or confidence, no link, a revenue share without a share): a wrong edge
 drives a wrong claim.

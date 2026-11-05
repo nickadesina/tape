@@ -63,7 +63,916 @@ nodes:
   amazon: {name: Amazon, kind: hyperscaler, public: true}
   meta: {name: Meta, kind: hyperscaler, public: true}
   oracle: {name: Oracle, kind: hyperscaler, public: true}
+  # Lenders, investors and other counterparties the draft edges need
+  blackstone: {name: Blackstone, kind: lender, public: true}
+  magnetar: {name: Magnetar Capital, kind: lender, public: false}
+  morgan_stanley: {name: Morgan Stanley, kind: lender, public: true}
+  mufg: {name: Mitsubishi UFJ Financial Group, kind: lender, public: true}
+  jpmorgan: {name: JPMorgan Chase, kind: lender, public: true}
+  softbank: {name: SoftBank Group, kind: fund, public: true}
+  cerebras: {name: Cerebras Systems, kind: chip, public: false}
 
-edges: []
+# Draft edges, 2026-11-05. An agent drafted these from filings, company
+# releases and reporting, with the source it checked on each. Every one has
+# verified_at: null, so none is loaded until a person checks it against its
+# source and sets verified_at. `tape graph --drafts` lists them.
+# Conventions the drafting used:
+#   - `date` is the disclosure date of the cited source; when that is a later
+#     filing, the note says when the agreement was signed.
+#   - Debt and lease edges run lender (or lessor) -> borrower (or lessee).
+#   - Warrant edges run holder -> issuer. Flip them if the money direction
+#     should win (oai-amd-2025-10-b, meta-amd-2026-02-b, amzn-aaoi-2025-03).
+#   - Amounts are written 100.0e+9: YAML reads 100.0e9 as a string.
+#   - Some pairs overlap and must not be summed: Microsoft-Anthropic ($30B in
+#     2025, amended to $44.9B), and the Amazon/Google 2026 facilities, part of
+#     which went into Anthropic's Series H.
+edges:
+  # ---------------- NVIDIA <-> OpenAI ----------------
+  - id: nvda-oai-2025-09
+    from: nvidia
+    to: openai
+    type: equity
+    size_usd: 100.0e+9
+    status: announced
+    tenor: "progressive, as each GW deployed; first GW 2H 2026 (Vera Rubin)"
+    share: null
+    date: 2025-09-22
+    source: https://investor.nvidia.com/news/press-release-details/2025/OpenAI-and-NVIDIA-Announce-Strategic-Partnership-to-Deploy-10-Gigawatts-of-NVIDIA-Systems/default.aspx
+    confidence: company
+    note: "Letter of intent: NVIDIA intends to invest up to $100B progressively as each GW of at least 10 GW of NVIDIA systems is deployed. NVIDIA's FY2026 10-K (filed 2026-02-25) still said it was 'finalizing an investment and partnership agreement with OpenAI' with 'no assurance'. Press reports say the Feb 2026 $30B investment (nvda-oai-2026-02) replaced this LOI. That is not confirmed by a primary source; treat this edge as likely superseded."
+    verified_at: null
+
+  - id: nvda-oai-2026-02
+    from: nvidia
+    to: openai
+    type: equity
+    size_usd: 30.0e+9
+    status: announced
+    tenor: null
+    share: null
+    date: 2026-02-27
+    source: https://www.cnbc.com/2026/02/27/open-ai-funding-round-amazon.html
+    confidence: reported
+    note: "NVIDIA $30B in OpenAI's $110B round at a $730B pre-money valuation, per OpenAI as reported by CNBC. CNBC also says OpenAI will use 3 GW of dedicated inference and 2 GW of training capacity on Vera Rubin systems. OpenAI's own page returned 403. Funding or closing of NVIDIA's portion is not confirmed in NVIDIA filings, which do not name the investee."
+    verified_at: null
+
+  - id: nvda-oai-2026-08
+    from: nvidia
+    to: openai
+    type: guarantee
+    size_usd: 105.0e+9
+    status: contracted
+    tenor: "each phase's 20-year lease term; ends early if OpenAI reaches a satisfactory credit rating"
+    share: null
+    date: 2026-08-26
+    source: https://www.sec.gov/Archives/edgar/data/1045810/000104581026000075/nvda-20260726.htm
+    confidence: filed
+    note: "NVIDIA 10-Q (Q2 FY27): in Aug 2026 NVIDIA entered guarantees capped at $105B in total. They give credit support on the land, power and shell buildout with affiliates of SB Energy, on behalf of an OpenAI affiliate, for leases of about 4.25 GW of IT load at the PORTS campus in Pike County, Ohio. In exchange the site exclusively hosts NVIDIA infrastructure. NVIDIA also holds an option to support about 3.8 GW more. The beneficiary is the lessor (SB Energy), on OpenAI's behalf."
+    verified_at: null
+
+  # ---------------- Microsoft <-> OpenAI ----------------
+  - id: msft-oai-2025-10
+    from: microsoft
+    to: openai
+    type: equity
+    size_usd: null
+    status: contracted
+    tenor: "IP rights through 2032"
+    share: null
+    date: 2025-10-28
+    source: https://blogs.microsoft.com/blog/2025/10/28/the-next-chapter-of-the-microsoft-openai-partnership/
+    confidence: company
+    note: "New definitive agreement at OpenAI's recapitalization. Microsoft holds about 27% of OpenAI Group PBC on an as-converted diluted basis, valued at about $135B (that is the stake's value, not cash invested, so size_usd is null). On 2026-04-27 the terms were amended (https://blogs.microsoft.com/blog/2026/04/27/the-next-phase-of-the-microsoft-openai-partnership/): Microsoft's IP licence becomes non-exclusive, Microsoft stops paying revenue share to OpenAI, and OpenAI's revenue-share payments to Microsoft continue through 2030 subject to an undisclosed cap."
+    verified_at: null
+
+  - id: oai-msft-2025-10
+    from: openai
+    to: microsoft
+    type: compute_contract
+    size_usd: 250.0e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2025-10-28
+    source: https://blogs.microsoft.com/blog/2025/10/28/the-next-chapter-of-the-microsoft-openai-partnership/
+    confidence: company
+    note: "OpenAI 'has contracted to purchase an incremental $250B of Azure services'. Microsoft gives up its right of first refusal as OpenAI's compute provider."
+    verified_at: null
+
+  # ---------------- AMD <-> OpenAI ----------------
+  - id: oai-amd-2025-10
+    from: openai
+    to: amd
+    type: supply
+    size_usd: null
+    status: contracted
+    tenor: "multi-year, multi-generation; first 1 GW of MI450 in 2H 2026, up to 6 GW"
+    share: null
+    date: 2025-10-06
+    source: https://www.sec.gov/Archives/edgar/data/2488/000119312525230895/d28189dex991.htm
+    confidence: filed
+    note: "Definitive agreement (per the release) for OpenAI to deploy 6 GW of AMD Instinct GPUs. AMD's CFO expects 'tens of billions of dollars in revenue'. No contract value is disclosed."
+    verified_at: null
+
+  - id: oai-amd-2025-10-b
+    from: openai
+    to: amd
+    type: equity
+    size_usd: null
+    status: contracted
+    tenor: "vests in tranches from first 1 GW deployment up to 6 GW"
+    share: null
+    date: 2025-10-06
+    source: https://www.sec.gov/Archives/edgar/data/2488/000119312525230895/d28189dex991.htm
+    confidence: filed
+    note: "AMD issued OpenAI a warrant for up to 160M AMD shares. Vesting is tied to GW deployment milestones, AMD share-price targets and OpenAI technical and commercial milestones. Reporting says the exercise price is $0.01, but I did not confirm that in this exhibit. Convention used for vendor warrants (here, meta-amd-2026-02-b and amzn-aaoi-2025-03): `from` = the stake holder, `to` = the issuer, even though the value flows issuer -> holder. Reverse all three if the graph should follow the value instead."
+    verified_at: null
+
+  # ---------------- Broadcom <-> OpenAI ----------------
+  - id: oai-avgo-2025-10
+    from: openai
+    to: broadcom
+    type: supply
+    size_usd: null
+    status: announced
+    tenor: "racks deploy from 2H 2026, complete by end of 2029"
+    share: null
+    date: 2025-10-13
+    source: https://investors.broadcom.com/news-releases/news-release-details/openai-and-broadcom-announce-strategic-collaboration-deploy-10
+    confidence: company
+    note: "Term sheet (not a definitive agreement) for 10 GW of OpenAI-designed accelerators plus Broadcom Ethernet and networking racks. Broadcom IR returns 403 to automated fetches. I checked the terms through the search-index snippet of this page and a republished copy (storagenewsletter.com). No dollar value is disclosed."
+    verified_at: null
+
+  # ---------------- Oracle <-> OpenAI ----------------
+  - id: oai-orcl-2025-09
+    from: openai
+    to: oracle
+    type: compute_contract
+    size_usd: 300.0e+9
+    status: contracted
+    tenor: "about 5 years, starting 2027"
+    share: null
+    date: 2025-09-10
+    source: https://www.theregister.com/2025/09/11/openai_reportedly_on_the_hook/
+    confidence: reported
+    note: "WSJ (unnamed sources) reported a signed contract for about $300B of Oracle compute over about 5 years from 2027. Oracle has never named the customer. Its 8-K of 2025-06-30 (https://www.sec.gov/Archives/edgar/data/1341439/000119312525152035/d136779d8k.htm) cites one agreement worth more than $30B a year from FY28. The 4.5 GW Stargate expansion with Oracle was announced on 2025-07-22. I could not fetch OpenAI's own page (403)."
+    verified_at: null
+
+  # ---------------- OpenAI -> CoreWeave ----------------
+  - id: oai-crwv-2025-03
+    from: openai
+    to: coreweave
+    type: compute_contract
+    size_usd: 11.9e+9
+    status: contracted
+    tenor: "through October 2030"
+    share: null
+    date: 2026-03-02
+    source: https://www.sec.gov/Archives/edgar/data/1769628/000176962826000104/crwv-20251231.htm
+    confidence: filed
+    note: "Master services agreement entered March 2025: 'OpenAI has committed to pay us up to approximately $11.9 billion through October 2030' (CoreWeave FY2025 10-K). At the IPO CoreWeave also issued OpenAI $350M of stock, offset against MSA revenue (424B4)."
+    verified_at: null
+
+  - id: oai-crwv-2025-05
+    from: openai
+    to: coreweave
+    type: compute_contract
+    size_usd: 4.0e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2025-09-25
+    source: https://investors.coreweave.com/news/news-details/2025/CoreWeave-Expands-Agreement-with-OpenAI-by-up-to-6-5B/
+    confidence: company
+    note: "Expansion of up to $4B announced in May 2025, recapped in the Sept 2025 release. I did not fetch the original May 2025 release."
+    verified_at: null
+
+  - id: oai-crwv-2025-09
+    from: openai
+    to: coreweave
+    type: compute_contract
+    size_usd: 6.5e+9
+    status: contracted
+    tenor: "through May 31, 2031"
+    share: null
+    date: 2025-09-25
+    source: https://investors.coreweave.com/news/news-details/2025/CoreWeave-Expands-Agreement-with-OpenAI-by-up-to-6-5B/
+    confidence: company
+    note: "Expansion of up to $6.5B. Total OpenAI contract value is now about $22.4B. The 'through May 31, 2031' term comes from CoreWeave's Q2 2026 10-Q."
+    verified_at: null
+
+  # ---------------- NVIDIA <-> CoreWeave ----------------
+  - id: nvda-crwv-2026-01
+    from: nvidia
+    to: coreweave
+    type: equity
+    size_usd: 2.0e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2026-01-26
+    source: https://www.sec.gov/Archives/edgar/data/1769628/000176962826000044/crwv-20260123.htm
+    confidence: filed
+    note: "8-K: on 2026-01-23 CoreWeave sold 22,935,780 Class A shares to NVIDIA at $87.20, $2B in total, by private placement. This sits alongside a collaboration aiming at more than 5 GW of AI factories by 2030. NVIDIA was already a holder before the IPO: 896,623 shares (5.97% of Class A, 1.21% of voting) per the S-1 (https://www.sec.gov/Archives/edgar/data/1769628/000119312525044231/d899798ds1.htm)."
+    verified_at: null
+
+  - id: nvda-crwv-2025-09
+    from: nvidia
+    to: coreweave
+    type: guarantee
+    size_usd: 6.3e+9
+    status: contracted
+    tenor: "through April 13, 2032"
+    share: null
+    date: 2025-09-15
+    source: https://www.sec.gov/Archives/edgar/data/1769628/000176962825000047/crwv-20250909.htm
+    confidence: filed
+    note: "Order form dated 2025-09-09 under the April 2023 MSA, initial value $6.3B. 'NVIDIA is obligated to purchase the residual unsold capacity through April 13, 2032', which works as a capacity backstop."
+    verified_at: null
+
+  # ---------------- CoreWeave revenue concentration ----------------
+  - id: msft-crwv-2024
+    from: microsoft
+    to: coreweave
+    type: revenue_concentration
+    size_usd: null
+    status: contracted
+    tenor: "FY2024"
+    share: 0.62
+    date: 2025-03-03
+    source: https://www.sec.gov/Archives/edgar/data/1769628/000119312525044231/d899798ds1.htm
+    confidence: filed
+    note: "S-1: Microsoft was 35% of CoreWeave revenue in 2023 and 62% in 2024. The top two customers were 77% in 2024."
+    verified_at: null
+
+  - id: msft-crwv-2025
+    from: microsoft
+    to: coreweave
+    type: revenue_concentration
+    size_usd: null
+    status: contracted
+    tenor: "FY2025"
+    share: 0.67
+    date: 2026-03-02
+    source: https://www.sec.gov/Archives/edgar/data/1769628/000176962826000104/crwv-20251231.htm
+    confidence: filed
+    note: "10-K: 'approximately 67% of our revenue from our top customer, Microsoft' for FY2025. No other customer reached 10%. Concentration then fell: in the Q2 2026 10-Q the top three customers were 36%, 26% and 10% for the quarter, all unnamed."
+    verified_at: null
+
+  # ---------------- Meta -> CoreWeave ----------------
+  - id: meta-crwv-2025-09
+    from: meta
+    to: coreweave
+    type: compute_contract
+    size_usd: 14.2e+9
+    status: contracted
+    tenor: "through December 14, 2031 (option to expand through 2032)"
+    share: null
+    date: 2025-09-30
+    source: https://www.sec.gov/Archives/edgar/data/1769628/000176962825000050/crwv-20250925.htm
+    confidence: filed
+    note: "Order form dated 2025-09-25 under the MSA of 2023-12-10. Meta 'initially committed to pay up to approximately $14.2 billion'."
+    verified_at: null
+
+  - id: meta-crwv-2026-04
+    from: meta
+    to: coreweave
+    type: compute_contract
+    size_usd: 21.0e+9
+    status: contracted
+    tenor: "through December 2032"
+    share: null
+    date: 2026-04-09
+    source: https://investors.coreweave.com/news/news-details/2026/CoreWeave-and-Meta-Announce-21-Billion-Expanded-AI-Infrastructure-Agreement/default.aspx
+    confidence: company
+    note: "Expanded agreement worth about $21B, including early Vera Rubin deployments. The Q2 2026 10-Q says the order form was entered March 2026, up to about $21.0B, covering new capacity through 2032-12-20 and an exercised option through 2032-04-10."
+    verified_at: null
+
+  # ---------------- CoreWeave debt facilities ----------------
+  - id: bx-crwv-2024-05
+    from: blackstone
+    to: coreweave
+    type: debt_lease
+    size_usd: 7.5e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2024-05-17
+    source: https://investors.coreweave.com/news/news-details/2024/CoreWeave-Secures-7-5-Billion-Debt-Financing-Facility-led-by-Blackstone-and-Magnetar/default.aspx
+    confidence: company
+    note: "DDTL 2.0, GPU-backed delayed-draw term loan. Lead: Blackstone funds. Co-lead: Magnetar. Others: Coatue, Carlyle, CDPQ, DigitalBridge Credit, BlackRock funds, Eldridge, Great Elm. The S-1 and 10-K give the size as up to $7.6B, and DDTL 2.1 added a $3.0B tranche in Sept 2025. The Magnetar edge below covers the same facility."
+    verified_at: null
+
+  - id: mag-crwv-2024-05
+    from: magnetar
+    to: coreweave
+    type: debt_lease
+    size_usd: null
+    status: contracted
+    tenor: null
+    share: null
+    date: 2024-05-17
+    source: https://investors.coreweave.com/news/news-details/2024/CoreWeave-Secures-7-5-Billion-Debt-Financing-Facility-led-by-Blackstone-and-Magnetar/default.aspx
+    confidence: company
+    note: "Magnetar was co-lead of DDTL 2.0 (the $7.5B facility in bx-crwv-2024-05). Its own share is not disclosed. Magnetar was also about 34.5% of pre-IPO Class A per the S-1. Do not double-count the facility amount."
+    verified_at: null
+
+  - id: ms-crwv-2025-07
+    from: morgan_stanley
+    to: coreweave
+    type: debt_lease
+    size_usd: 2.6e+9
+    status: contracted
+    tenor: "matures August 21, 2030; SOFR + 4.00%"
+    share: null
+    date: 2025-07-31
+    source: https://investors.coreweave.com/news/news-details/2025/CoreWeave-Closes-2-6-Billion-Secured-Debt-Financing-Facility-Strengthening-Market-Position-as-AI-Cloud-Leader/default.aspx
+    confidence: company
+    note: "DDTL 3.0, funding infrastructure for the OpenAI contract. Morgan Stanley and MUFG are joint lead arrangers and bookrunners, Goldman Sachs is JLA, and the syndicate includes JPMorgan, Wells Fargo, BBVA, Crédit Agricole, SMBC, PNC and SocGen."
+    verified_at: null
+
+  - id: mufg-crwv-2026-03
+    from: mufg
+    to: coreweave
+    type: debt_lease
+    size_usd: 8.5e+9
+    status: contracted
+    tenor: "matures March 2032; SOFR + 2.25% floating tranche, about 5.9% fixed tranche"
+    share: null
+    date: 2026-03-31
+    source: https://investors.coreweave.com/news/news-details/2026/CoreWeave-Closes-Landmark-8-5-Billion-Financing-Facility-Achieving-First-Investment-Grade-Rated-GPU-backed-Financing/default.aspx
+    confidence: company
+    note: "DDTL 4.0, the first investment-grade (Moody's A3) GPU-backed financing. About $7.5B is available at first, rising to $8.5B. MUFG and Morgan Stanley are co-structuring agents and joint bookrunners, Goldman and JPMorgan are additional coordinating lead arrangers, and Blackstone Credit & Insurance anchored. It backs a contract with an unnamed 'leading AI enterprise'. The lender node is a choice: MUFG could be swapped for Morgan Stanley or Blackstone."
+    verified_at: null
+
+  - id: jpm-crwv-2026-08
+    from: jpmorgan
+    to: coreweave
+    type: debt_lease
+    size_usd: 2.6e+9
+    status: contracted
+    tenor: "about 5 years (maturity Sept 1, 2031 per 8-K coverage); SOFR + 5.50%"
+    share: null
+    date: 2026-08-10
+    source: https://investors.coreweave.com/news/news-details/2026/CoreWeave-Closes-2-6-Billion-Loan-Facility-Expanding-Financing-Flexibility-for-AI-Infrastructure/default.aspx
+    confidence: company
+    note: "DDTL 5.5. JPMorgan and MUFG are joint lead arrangers and bookrunners. The loan tenor (about 5 years) exceeds the underlying contracts' roughly 3-year average, which carries re-leasing risk. Not drafted: DDTL 5.0 ($3.1B, May 2026), whose lenders I did not check."
+    verified_at: null
+
+  # ---------------- Nebius ----------------
+  - id: msft-nbis-2025-09
+    from: microsoft
+    to: nebius
+    type: compute_contract
+    size_usd: 17.4e+9
+    status: contracted
+    tenor: "5 years, through 2031"
+    share: null
+    date: 2025-09-08
+    source: https://www.sec.gov/Archives/edgar/data/1513845/000110465925088312/tm2525580d1_6k.htm
+    confidence: filed
+    note: "6-K: about $17.4B through 2031 for dedicated GPU capacity at Vineland, NJ, rising to about $19.4B if Microsoft takes additional services. Obligations begin only once Nebius confirms financing for the capex."
+    verified_at: null
+
+  - id: meta-nbis-2025-11
+    from: meta
+    to: nebius
+    type: compute_contract
+    size_usd: 3.0e+9
+    status: contracted
+    tenor: "5 years"
+    share: null
+    date: 2025-11-11
+    source: https://www.thestar.com.my/tech/tech-news/2025/11/11/ai-cloud-firm-nebius-signs-3-billion-deal-with-meta-posts-more-than-four-fold-rise-in-revenue
+    confidence: reported
+    note: "Reuters: a 5-year deal worth about $3B, announced with Nebius's Q3 2025 results. The size was capped by available capacity. I did not fetch Nebius's own shareholder letter or press release (Business Wire 20251111749716)."
+    verified_at: null
+
+  - id: meta-nbis-2026-03
+    from: meta
+    to: nebius
+    type: compute_contract
+    size_usd: 12.0e+9
+    status: contracted
+    tenor: "5 years, delivery from early 2027"
+    share: null
+    date: 2026-03-16
+    source: https://nebius.com/newsroom/nebius-signs-new-ai-infrastructure-agreement-with-meta
+    confidence: company
+    note: "$12B of dedicated capacity across multiple sites, on Vera Rubin. Part of a deal worth up to about $27B; the $15B additional commitment is the separate edge meta-nbis-2026-03-b."
+    verified_at: null
+
+  - id: meta-nbis-2026-03-b
+    from: meta
+    to: nebius
+    type: compute_contract
+    size_usd: 15.0e+9
+    status: announced
+    tenor: "same 5-year period"
+    share: null
+    date: 2026-03-16
+    source: https://nebius.com/newsroom/nebius-signs-new-ai-infrastructure-agreement-with-meta
+    confidence: company
+    note: "Meta 'committed to purchase up to $15 billion of additional available compute capacity across certain upcoming Nebius clusters'. Marked announced because of the 'up to' and availability conditions."
+    verified_at: null
+
+  # ---------------- IREN ----------------
+  - id: msft-iren-2025-11
+    from: microsoft
+    to: iren
+    type: compute_contract
+    size_usd: 9.7e+9
+    status: contracted
+    tenor: "5 years"
+    share: null
+    date: 2025-11-03
+    source: https://www.sec.gov/Archives/edgar/data/1878848/000114036125040072/ef20058139_ex99-1.htm
+    confidence: filed
+    note: "GB300 GPU cloud services at Childress, TX, with a 20% prepayment. IREN separately buys the GPUs and equipment from Dell for about $5.8B. Dell is not a node."
+    verified_at: null
+
+  - id: nvda-iren-2026-05
+    from: nvidia
+    to: iren
+    type: compute_contract
+    size_usd: 3.4e+9
+    status: contracted
+    tenor: "5 years, ramp from early 2027"
+    share: null
+    date: 2026-05-07
+    source: https://www.sec.gov/Archives/edgar/data/0001878848/000187884826000025/irenreportsq3fy26results.htm
+    confidence: filed
+    note: "Managed GPU cloud on air-cooled Blackwell within about 60 MW at Childress, for NVIDIA's internal workloads. NVIDIA also got a 5-year right to buy up to 30M IREN shares at $70 (about $2.1B), subject to conditions including regulatory approval, as part of a '5GW strategic partnership'. That option is not drafted as an edge."
+    verified_at: null
+
+  # ---------------- Anthropic: equity ----------------
+  - id: amzn-anth-2024-11
+    from: amazon
+    to: anthropic
+    type: equity
+    size_usd: 8.0e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "Total of the convertible notes under the Amazon 2023 NPA (up to $4.0B, Sept 2023) and the 2024 NPA (Nov 22, 2024; $4.0B principal outstanding), per the S-1/A. Notes are capped so that Amazon holds no more than 12% of capitalization on conversion. Date is the S-1/A date; the deals ran 2023-24."
+    verified_at: null
+
+  - id: amzn-anth-2026-04
+    from: amazon
+    to: anthropic
+    type: equity
+    size_usd: 5.0e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "Amazon 2026 NPA (April 2026; announced 2026-04-20): Amazon bought 19.3M Series G-2 preferred shares at $259.1364, about $5.0B."
+    verified_at: null
+
+  - id: amzn-anth-2026-04-b
+    from: amazon
+    to: anthropic
+    type: equity
+    size_usd: 20.0e+9
+    status: announced
+    tenor: "issuable until the earlier of 30 months after IPO or termination of certain commercial agreements"
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "Up to $20.0B of non-voting stock or convertible notes, available in $5.0B steps as compute-capacity milestones are met. In May 2026 Amazon put $5.0B into Series H, which cut the remaining capacity to $15.0B, so about $5B of this edge has been drawn as Series H equity."
+    verified_at: null
+
+  - id: goog-anth-2026-03
+    from: google
+    to: anthropic
+    type: equity
+    size_usd: 10.0e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "Google 2026 NPA (March 2026): Google bought 38.6M Series G-2 shares at $259.1364, about $10.0B. The public announcement of 'up to $40B' came 2026-04-24 and is reported. Google's earlier investments (2023 notes; a $1.3B Aug 2024 note) are not drafted. The S-1/A says Amazon and Google will each hold more than 5% after the IPO."
+    verified_at: null
+
+  - id: goog-anth-2026-03-b
+    from: google
+    to: anthropic
+    type: equity
+    size_usd: 30.0e+9
+    status: announced
+    tenor: "through December 31, 2030"
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "Up to $30.0B of convertible notes (9%, 6-year) or non-voting stock, subject to conditions. In May 2026 Google invested $10.0B in Series H, which cut the remaining capacity to $20.0B, so about $10B of this edge has been drawn."
+    verified_at: null
+
+  - id: msft-anth-2025-11
+    from: microsoft
+    to: anthropic
+    type: equity
+    size_usd: 5.0e+9
+    status: announced
+    tenor: null
+    share: null
+    date: 2025-11-18
+    source: https://www.anthropic.com/news/microsoft-nvidia-anthropic-announce-strategic-partnerships
+    confidence: company
+    note: "Microsoft 'committing to invest up to $5 billion'. Coverage says Anthropic's Feb 2026 Series G 'includes a portion' of the Microsoft and NVIDIA commitments, but I found no exact amount closed."
+    verified_at: null
+
+  - id: nvda-anth-2025-11
+    from: nvidia
+    to: anthropic
+    type: equity
+    size_usd: 10.0e+9
+    status: announced
+    tenor: null
+    share: null
+    date: 2025-11-18
+    source: https://www.anthropic.com/news/microsoft-nvidia-anthropic-announce-strategic-partnerships
+    confidence: company
+    note: "NVIDIA 'committing to invest up to $10 billion'. Anthropic also commits to up to 1 GW of compute on Grace Blackwell and Vera Rubin systems. As with Microsoft, the amount actually closed is unconfirmed."
+    verified_at: null
+
+  - id: amd-anth-2026-07
+    from: amd
+    to: anthropic
+    type: equity
+    size_usd: 5.0e+9
+    status: announced
+    tenor: "drawable in increments after AMD GPU delivery and deployment milestones; first expected 2027"
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "Under the July 2026 Hardware Supply Agreement, AMD committed to buy up to $5.0B of Anthropic Class N common stock, at Anthropic's draw, after deployment milestones."
+    verified_at: null
+
+  # ---------------- Anthropic: compute commitments ----------------
+  - id: anth-msft-2025-11
+    from: anthropic
+    to: microsoft
+    type: compute_contract
+    size_usd: 30.0e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2025-11-18
+    source: https://www.anthropic.com/news/microsoft-nvidia-anthropic-announce-strategic-partnerships
+    confidence: company
+    note: "Anthropic 'committed to purchase $30 billion of Azure compute capacity' and to contract further capacity up to 1 GW. The agreement was later amended up to $44.9B (anth-msft-2026-10), so do not sum the two."
+    verified_at: null
+
+  - id: anth-msft-2026-10
+    from: anthropic
+    to: microsoft
+    type: compute_contract
+    size_usd: 44.9e+9
+    status: contracted
+    tenor: "November 2026 to June 2033"
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "S-1/A: agreement of Nov 2025, amended Feb–Oct 2026, with a minimum spend of $44.9B regardless of usage. Non-cancelable except for Microsoft's uncured material breach or, per tranche, undelivered tranches. This supersedes the $30B figure."
+    verified_at: null
+
+  - id: anth-goog-2026-03
+    from: anthropic
+    to: google
+    type: compute_contract
+    size_usd: 121.3e+9
+    status: contracted
+    tenor: "April 2026 to July 2033"
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "CSP hosting agreement of March 2026, amended May–Oct 2026, with a minimum spend of about $121.3B and a true-up. The original S-1 said about $111.1B per reporting; only Google's figure changed in the S-1/A. Separately, Anthropic committed to more TPU compute for 2028-31 with no fixed amount, estimated at $125-150B and not included here. The 1M-TPU deal of Oct 2025 is announced at https://www.googlecloudpresscorner.com/2025-10-23-Anthropic-to-Expand-Use-of-Google-Cloud-TPUs-and-Services ('tens of billions')."
+    verified_at: null
+
+  - id: anth-amzn-2026-04
+    from: anthropic
+    to: amazon
+    type: compute_contract
+    size_usd: 110.0e+9
+    status: contracted
+    tenor: "May 2026 to April 2036"
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "April 2026 agreement with a minimum spend of $110.0B and a true-up. It is non-cancelable except for Amazon's uncured breach. The public announcement (2026-04-20) said more than $100B over 10 years and up to 5 GW of Trainium capacity."
+    verified_at: null
+
+  - id: avgo-anth-2026-03
+    from: broadcom
+    to: anthropic
+    type: debt_lease
+    size_usd: 161.2e+9
+    status: contracted
+    tenor: "5-year master equipment leases (finance leases); rent quarterly from ready-for-service"
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "Broadcom, and the financing entities it has assigned parts to, lease TPU-based AI hardware to Anthropic: about $161.2B of total rent excluding interest. Of that, the 2026 Lease Arrangement (March 2026) is about $125.2B. Rent flows Anthropic -> Broadcom/financiers, so lessor is `from` here as the financing party. This ties to the Broadcom 8-K of 2026-04-06 (3.5 GW of TPU compute from 2027 via Broadcom, https://www.sec.gov/Archives/edgar/data/1730168/000119312526144028/d87999d8k.htm)."
+    verified_at: null
+
+  - id: anth-amd-2026-07
+    from: anthropic
+    to: amd
+    type: supply
+    size_usd: 20.0e+9
+    status: contracted
+    tenor: "no fixed term; initial tranche in calendar 2027"
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "Hardware Supply Agreement (July 2026) for AMD Helios / MI450 racks. There is no fixed dollar commitment, but Anthropic expects spending above $20.0B if it takes the full initial tranche, and may procure about as much again. Non-cancelable by Anthropic except for AMD's uncured breach. size_usd is a floor estimate, not a commitment."
+    verified_at: null
+
+  - id: anth-spcx-2026-05
+    from: anthropic
+    to: spacex
+    type: compute_contract
+    size_usd: 120.5e+9
+    status: contracted
+    tenor: "into 2029; non-cancelable periods end Jan/Mar 2027, then 90 days' notice"
+    share: null
+    date: 2026-11-02
+    source: https://www.sec.gov/Archives/edgar/data/2130357/000162828026068676/anthropicpbc-sx1ax1.htm
+    confidence: filed
+    note: "SpaceXAI Arrangements (May–Oct 2026) for NVIDIA-GPU compute at Colossus and Colossus II: up to $120.5B, about $3.1B a month once fully delivered (expected Dec 2026). SpaceX's prospectus (424B4, 2026-06-12, https://www.sec.gov/Archives/edgar/data/1181412/000162828026042639/spaceexplorationtechnologi.htm) gave the original terms: about 325,000 NVIDIA GPUs at $1.25B a month through May 2029. It is cancellable on 90 days' notice after the initial period, so 'contracted' overstates how firm it is."
+    verified_at: null
+
+  - id: anth-spcx-2026-q3
+    from: anthropic
+    to: spacex
+    type: revenue_concentration
+    size_usd: null
+    status: contracted
+    tenor: "Q3 2026 (three months to Sept 30, 2026); 24.2% for nine months"
+    share: 0.345
+    date: 2026-10-29
+    source: https://finance.yahoo.com/technology/ai/articles/anthropic-accounts-over-third-spacex-014451805.html
+    confidence: reported
+    note: "SpaceX's 10-Q (https://www.sec.gov/Archives/edgar/data/0001181412/000162828026066880/spcx-20260930.htm) shows 'Customer B' at 34.5% of Q3 2026 consolidated revenue, in the SI segment. That share is filed. Only Bloomberg (one unnamed source, via Investing.com/Yahoo) identifies Customer B as Anthropic; neither company has confirmed it."
+    verified_at: null
+
+  # ---------------- Memory LOIs (Stargate) ----------------
+  - id: oai-ssnlf-2025-10
+    from: openai
+    to: samsung
+    type: supply
+    size_usd: null
+    status: announced
+    tenor: null
+    share: null
+    date: 2025-10-01
+    source: https://news.samsung.com/global/samsung-and-openai-announce-strategic-partnership-to-accelerate-advancements-in-global-ai-infrastructure
+    confidence: company
+    note: "Letter of intent: Samsung Electronics becomes a 'strategic memory partner' for Stargate. OpenAI's memory demand is 'projected to reach up to 900,000 DRAM wafers per month'; that is OpenAI's demand forecast, not a Samsung volume commitment. Samsung SDS, C&T and Heavy Industries are also in the LOI for data centres."
+    verified_at: null
+
+  - id: oai-skh-2025-10
+    from: openai
+    to: sk_hynix
+    type: supply
+    size_usd: null
+    status: announced
+    tenor: null
+    share: null
+    date: 2025-10-01
+    source: https://eng.sk.com/news/sk-group-partners-with-openai-to-advance-global-ai-infrastructure
+    confidence: company
+    note: "Memory Supply LOI: SK hynix will supply HBM for Stargate 'with demand up to 900,000 DRAM wafers per month'. Separately, SK Telecom signed an MOU on an AI data centre in Korea."
+    verified_at: null
+
+  # ---------------- Amazon <-> OpenAI ----------------
+  - id: amzn-oai-2026-02
+    from: amazon
+    to: openai
+    type: equity
+    size_usd: 15.0e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2026-02-27
+    source: https://www.sec.gov/Archives/edgar/data/1018724/000110465926021050/tm267374d1_ex99-1.htm
+    confidence: filed
+    note: "Amazon 8-K exhibit (joint release): Amazon will invest $50B, starting with $15B. This is the initial tranche of OpenAI's $110B round."
+    verified_at: null
+
+  - id: amzn-oai-2026-02-b
+    from: amazon
+    to: openai
+    type: equity
+    size_usd: 35.0e+9
+    status: announced
+    tenor: "'in the coming months when certain conditions are met'"
+    share: null
+    date: 2026-02-27
+    source: https://www.sec.gov/Archives/edgar/data/1018724/000110465926021050/tm267374d1_ex99-1.htm
+    confidence: filed
+    note: "Conditional second tranche. The conditions are not disclosed. Some outlets say it is tied to an IPO or an AGI milestone, which is unconfirmed."
+    verified_at: null
+
+  - id: oai-amzn-2025-11
+    from: openai
+    to: amazon
+    type: compute_contract
+    size_usd: 38.0e+9
+    status: contracted
+    tenor: "multi-year, growth over 7 years; all capacity targeted by end-2026"
+    share: null
+    date: 2025-11-03
+    source: https://www.aboutamazon.com/news/aws/aws-open-ai-workloads-compute-infrastructure
+    confidence: company
+    note: "AWS and OpenAI agreement for $38B: hundreds of thousands of GB200/GB300 GPUs on EC2 UltraServers. The page shows no date; Nov 3, 2025 comes from coverage."
+    verified_at: null
+
+  - id: oai-amzn-2026-02
+    from: openai
+    to: amazon
+    type: compute_contract
+    size_usd: 100.0e+9
+    status: announced
+    tenor: "8 years"
+    share: null
+    date: 2026-02-27
+    source: https://www.sec.gov/Archives/edgar/data/1018724/000110465926021050/tm267374d1_ex99-1.htm
+    confidence: filed
+    note: "Expands the $38B AWS agreement by $100B over 8 years, including about 2 GW of Trainium3 and Trainium4 capacity (Trainium4 from 2027). I marked it announced because the release says 'expanding' without confirming a signed order. Upgrade to contracted if a filing confirms it."
+    verified_at: null
+
+  # ---------------- Other OpenAI ----------------
+  - id: sftbf-oai-2026-10
+    from: softbank
+    to: openai
+    type: equity
+    size_usd: 30.0e+9
+    status: contracted
+    tenor: "three $10B tranches via Vision Fund 2"
+    share: null
+    date: 2026-10-01
+    source: https://www.thestar.com.my/tech/tech-news/2026/10/02/softbank-completes-final-phase-of-30-billion-investment-in-openai
+    confidence: reported
+    note: "Reuters: SoftBank completed its $30B investment from the Feb 2026 round, which grew to $122B at $852B post-money. SoftBank's cumulative OpenAI investment is $64.6B, about 13%. The earlier $41B investment completed in Dec 2025 is not drafted."
+    verified_at: null
+
+  - id: oai-cbrs-2026-01
+    from: openai
+    to: cerebras
+    type: compute_contract
+    size_usd: 10.0e+9
+    status: contracted
+    tenor: "3 years, tranches through 2028; up to 750 MW"
+    share: null
+    date: 2026-01-14
+    source: https://www.thestar.com.my/tech/tech-news/2026/01/15/openai-to-buy-compute-capacity-from-cerebras-in-latest-ai-deal
+    confidence: reported
+    note: "OpenAI buys up to 750 MW of Cerebras inference compute; the 750 MW and 3-year term were stated by the companies. The 'more than $10B' value comes from one unnamed source (Reuters), so size_usd is a floor."
+    verified_at: null
+
+  # ---------------- Chips / silicon / optics ----------------
+  - id: nvda-intc-2025-12
+    from: nvidia
+    to: intel
+    type: equity
+    size_usd: 5.0e+9
+    status: contracted
+    tenor: null
+    share: null
+    date: 2025-12-29
+    source: https://www.sec.gov/Archives/edgar/data/50863/000005086325000204/intc-20251226.htm
+    confidence: filed
+    note: "Intel 8-K: on 2025-12-26 Intel issued 214,776,632 shares to NVIDIA at $23.28, $5.0B in cash, under the Sept 2025 securities purchase agreement. Reports put it at about 4%."
+    verified_at: null
+
+  - id: meta-amd-2026-02
+    from: meta
+    to: amd
+    type: supply
+    size_usd: null
+    status: contracted
+    tenor: "first 1 GW from 2H 2026; up to 6 GW"
+    share: null
+    date: 2026-02-24
+    source: https://www.sec.gov/Archives/edgar/data/2488/000000248826000045/amd-20260223.htm
+    confidence: filed
+    note: "Amendment to the Meta–AMD Master Purchase Agreement of 2023-05-23. Only the first 1 GW is binding; the rest, up to 6 GW, is optional. No value is disclosed. An analyst estimate cited by CNBC says 'tens of billions over at least four years'; WSJ reportedly said over $100B including the warrant. If the edge should carry only the binding part, split it into 1 GW contracted and 5 GW announced."
+    verified_at: null
+
+  - id: meta-amd-2026-02-b
+    from: meta
+    to: amd
+    type: equity
+    size_usd: null
+    status: contracted
+    tenor: "exercisable until February 23, 2031"
+    share: null
+    date: 2026-02-24
+    source: https://www.sec.gov/Archives/edgar/data/2488/000000248826000045/amd-20260223.htm
+    confidence: filed
+    note: "Warrant for up to 160M AMD shares at $0.01. Tranches vest from shipment of the first 1 GW to 6 GW of purchases, and need AMD share-price thresholds up to $600 plus Meta technical and commercial conditions. It mirrors the OpenAI warrant."
+    verified_at: null
+
+  - id: meta-nvda-2026-02
+    from: meta
+    to: nvidia
+    type: supply
+    size_usd: null
+    status: announced
+    tenor: "multiyear, multigenerational"
+    share: null
+    date: 2026-02-17
+    source: https://investor.nvidia.com/news/press-release-details/2026/Meta-Builds-AI-Infrastructure-With-NVIDIA/default.aspx
+    confidence: company
+    note: "Strategic partnership: millions of Blackwell and Rubin GPUs, Grace CPUs (the first large Grace-only deployment), Vera CPUs from 2027, and Spectrum-X. No financial value is disclosed."
+    verified_at: null
+
+  - id: amzn-aaoi-2025-03
+    from: amazon
+    to: aaoi
+    type: equity
+    size_usd: null
+    status: contracted
+    tenor: "exercisable until March 13, 2035"
+    share: null
+    date: 2025-03-13
+    source: https://www.sec.gov/Archives/edgar/data/1158114/000168316825001580/appliedopto_8k.htm
+    confidence: filed
+    note: "Warrant for up to 7,945,399 AAOI shares at $23.6954. 1,324,233 vested at issuance; the rest vest with Amazon's discretionary purchases of up to $4B. This is a customer-tied warrant: `from` = holder (Amazon), `to` = issuer, the same convention as oai-amd-2025-10-b and meta-amd-2026-02-b."
+    verified_at: null
+
+  # ---------------- Memory supply ----------------
+  - id: nvda-skh-2026-07
+    from: nvidia
+    to: sk_hynix
+    type: supply
+    size_usd: 500.0e+9
+    status: announced
+    tenor: "'over a number of years'"
+    share: null
+    date: 2026-07-24
+    source: https://www.cnbc.com/2026/07/25/nvidia-locks-down-memory-from-sk-hynix-as-part-of-500-billion-ai-deal.html
+    confidence: reported
+    note: "HBM supply plus co-development, inside a wider SK Group deal (SK Telecom cloud on Vera Rubin, about 2 GW of data centres from 2027) that 'could be worth $500 billion'. $500B is the total package potential, not a firm HBM purchase. CNBC does not say whether it is binding."
+    verified_at: null
+
+  - id: avgo-ssnlf-2026-07
+    from: broadcom
+    to: samsung
+    type: supply
+    size_usd: 200.0e+9
+    status: announced
+    tenor: null
+    share: null
+    date: 2026-07-25
+    source: https://www.cnbc.com/2026/07/25/nvidia-locks-down-memory-from-sk-hynix-as-part-of-500-billion-ai-deal.html
+    confidence: reported
+    note: "MOU between Samsung Electronics and Broadcom to expand memory and foundry work, worth 'about $200 billion' by Samsung's own estimate (per CNBC). The exact MOU date is not in the article (July 2026). Neither company's release has been checked."
+    verified_at: null
+
+  - id: sndk-kioxia-2026-01
+    from: sandisk
+    to: kioxia
+    type: supply
+    size_usd: 1.165e+9
+    status: contracted
+    tenor: "JV agreements extended to Dec 31, 2034; payments 2026-2029"
+    share: null
+    date: 2026-01-29
+    source: https://www.kioxia.com/en-jp/about/news/2026/20260130-1.html
+    confidence: company
+    note: "Yokkaichi and Kitakami JV extension. Sandisk pays Kioxia $1.165B for manufacturing services and continued supply. Sandisk's 10-K rounds this to $1.2B."
+    verified_at: null
+
+  # ---------------- SpaceX / xAI ----------------
+  - id: nvda-spcx-2026-01
+    from: nvidia
+    to: spacex
+    type: equity
+    size_usd: null
+    status: contracted
+    tenor: null
+    share: null
+    date: 2026-01-06
+    source: https://techcrunch.com/2026/01/06/xai-says-it-raised-20b-in-series-e-funding/
+    confidence: reported
+    note: "NVIDIA was a named 'strategic investor' in xAI's $20B Series E (Jan 2026). Its amount is undisclosed, and xAI did not say whether the round was equity or debt. xAI merged into SpaceX on 2026-02-02, so the stake now sits in SpaceX. The edge points to spacex because that node holds xAI. Reports from Oct 2025 of up to $2B from NVIDIA via an SPV are unconfirmed."
+    verified_at: null
 
 corrections: []
