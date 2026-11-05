@@ -102,7 +102,17 @@ def _formatter(fmt: str):
     if fmt == "pct_ann":
         return FuncFormatter(lambda v, _: f"{v * 100:.0f}%")
     if fmt == "usd":
-        return FuncFormatter(lambda v, _: f"${v / 1e6:.0f}M")
+        return FuncFormatter(
+            lambda v, _: (
+                "$0"
+                if v == 0
+                else f"${v / 1e6:.0f}M"
+                if abs(v) >= 1e7
+                else f"${v / 1e6:.1f}M"
+                if abs(v) >= 1e5
+                else f"${v / 1e3:.0f}k"
+            )
+        )
     return None
 
 
@@ -253,6 +263,7 @@ def render_panels(
     dashed_below: float,
     size: ChartSize | None = None,
     xlim: tuple[datetime, datetime] | None = None,
+    marker: Marker | None = None,
 ) -> bytes:
     """A market page chart: stacked panels sharing the time axis."""
     size = size or ChartSize(1200, 1000)
@@ -273,6 +284,8 @@ def render_panels(
             if ln.points:
                 span = max(span, (ln.points[-1][0] - ln.points[0][0]).total_seconds() / 86400)
         ax.set_title(p.title, loc="left", fontsize=11)
+        if marker:
+            ax.axvline(marker.time, color=CALLOUT, lw=1.5, ls=":")
         if len(p.lines) > 1:
             ax.legend(
                 loc="upper left", fontsize=8, frameon=True, fancybox=False, edgecolor="#7F7F7F", ncol=len(p.lines)
@@ -323,5 +336,87 @@ def render_notice(*, text: str, footer: Footer, size: ChartSize | None = None) -
     size = size or ChartSize()
     fig = _figure(size.width, size.height)
     fig.text(0.05, 0.6, text, fontsize=20, va="center", wrap=True)
+    _footer(fig, footer)
+    return _png(fig)
+
+
+@dataclass
+class HBar:
+    label: str
+    value: float
+    lo: float | None = None
+    hi: float | None = None
+    note: str = ""
+
+
+def render_bars(*, title: str, bars: list[HBar], footer: Footer, xlabel: str, size: ChartSize | None = None) -> bytes:
+    """Horizontal bars in USD, largest first, with a lo-hi whisker where there is one."""
+    size = size or ChartSize()
+    fig = _figure(size.width, size.height)
+    ax = fig.add_subplot(111)
+    fig.subplots_adjust(left=0.30, right=0.90, top=0.90, bottom=0.12)
+    ax.set_title(title, loc="left", fontsize=13)
+    ys = list(range(len(bars)))[::-1]
+    vals = [b.value for b in bars]
+    ax.barh(ys, vals, color=EXCEL[0], edgecolor="#404040", lw=0.5)
+    for y, b in zip(ys, bars, strict=True):
+        if b.lo is not None and b.hi is not None:
+            ax.plot([b.lo, b.hi], [y, y], color=HEAVY, lw=1.5)
+            ax.plot([b.lo, b.lo], [y - 0.15, y + 0.15], color=HEAVY, lw=1.5)
+            ax.plot([b.hi, b.hi], [y - 0.15, y + 0.15], color=HEAVY, lw=1.5)
+        right = max(b.value, b.hi or 0)
+        amount = f"${b.value / 1e6:,.1f}M" if b.value >= 1e5 else f"${b.value / 1e3:,.0f}k"
+        ax.text(right, y, f"  {amount}{(' ' + b.note) if b.note else ''}", va="center", fontsize=9)
+    ax.set_yticks(ys)
+    ax.set_yticklabels([b.label for b in bars], fontsize=10)
+    ax.grid(True, axis="x", color="#BFBFBF", lw=0.8)
+    ax.set_axisbelow(True)
+    ax.xaxis.set_major_formatter(_formatter("usd"))
+    ax.set_xlabel(xlabel, fontsize=10)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+    hi = max([max(b.value, b.hi or 0) for b in bars] + [1.0])
+    ax.set_xlim(0, hi * 1.25)
+    _footer(fig, footer)
+    return _png(fig)
+
+
+def render_rounds(
+    *,
+    title: str,
+    paths: dict[str, list[float]],
+    forced: dict[str, list[float]],
+    footer: Footer,
+    size: ChartSize | None = None,
+) -> bytes:
+    """A cascade by round: each market's price (change from the sweep mark) on
+    top, forced notional by round as stacked bars under it. Round 0 is the shock."""
+    size = size or ChartSize()
+    fig = _figure(size.width, size.height)
+    gs = fig.add_gridspec(2, 1, height_ratios=[3, 2], hspace=0.35, left=0.08, right=0.80, top=0.91, bottom=0.10)
+    ax, axb = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
+    ax.set_title(title, loc="left", fontsize=13)
+    _style_axes(ax, "pct")
+    ax.axhline(0, color="#7F7F7F", lw=1)
+    for i, (label, pts) in enumerate(paths.items()):
+        ax.plot(range(len(pts)), pts, color=EXCEL[i % len(EXCEL)], lw=2, marker="o", ms=4, label=label)
+    ax.legend(
+        loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=True, fontsize=9, edgecolor="#7F7F7F", fancybox=False
+    )
+    ax.set_xlabel("round", fontsize=9)
+    n = max([len(v) for v in forced.values()] + [1])
+    bottom = [0.0] * n
+    for i, (label, vals) in enumerate(forced.items()):
+        vals = list(vals) + [0.0] * (n - len(vals))
+        axb.bar(
+            range(1, n + 1), vals, bottom=bottom, color=EXCEL[i % len(EXCEL)], edgecolor="#404040", lw=0.5, label=label
+        )
+        bottom = [b + v for b, v in zip(bottom, vals, strict=True)]
+    axb.set_title("Forced selling by round", loc="left", fontsize=10)
+    _style_axes(axb, "usd")
+    axb.set_xlabel("round", fontsize=9)
+    ax.set_xticks(range(n + 1))
+    axb.set_xticks(range(1, n + 1))
+    axb.set_xlim(0.4, n + 0.6)
     _footer(fig, footer)
     return _png(fig)

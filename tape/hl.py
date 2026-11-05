@@ -39,6 +39,8 @@ PER_ITEM_20 = {
     "validatorStats",
 }
 
+PER_ITEM_60 = {"candleSnapshot"}
+
 HIGH = 0
 LOW = 1
 
@@ -54,6 +56,8 @@ def base_weight(req_type: str) -> int:
 def extra_weight(req_type: str, n_items: int) -> int:
     if req_type in PER_ITEM_20:
         return n_items // 20
+    if req_type in PER_ITEM_60:
+        return n_items // 60
     return 0
 
 
@@ -167,3 +171,12 @@ class InfoClient:
         if end_ms is not None:
             body["endTime"] = end_ms
         return await self.post(body, priority)
+
+    async def candles(self, coin: str, interval: str, start_ms: int, end_ms: int, priority: int = LOW) -> list[dict]:
+        return await self.post(
+            {
+                "type": "candleSnapshot",
+                "req": {"coin": coin, "interval": interval, "startTime": start_ms, "endTime": end_ms},
+            },
+            priority,
+        )

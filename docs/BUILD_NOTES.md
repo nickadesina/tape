@@ -141,3 +141,98 @@ outside this repo:
   and recompute with `tape metrics --hour …` if the history should change.
 - **Write a take each day without posting** until the 30-day window is at least half full and the complex clears
   98%.
+
+## Leverage map (design doc, Nov 5 2026)
+
+What the build of the AI Leverage Map found and decided, in the order of the doc's "Changes to the existing Tape".
+
+### Sweep: account margin
+
+`clearinghouseState` already carries the margin summary; the sweep used to drop it. It now writes an `accounts` row
+(account value, cross account value, margin used, cross maintenance margin, withdrawable, and cross/isolated/mixed over
+the complex positions) in the same chunk transaction as `snapshots`, and each snapshot row gains its margin type,
+margin used and position value. Margin on a HIP-3 dex is per dex, so the row is keyed `(hour, address, dex)`.
+Rows are written only for pairs with a position in the complex; their totals include positions outside it, which the
+stress test holds at their snapshot price.
+
+### Depth: three views of one book
+
+`l2Book` sends at most 20 levels a side. A live check on 2026-11-05: at full precision xyz:CRWV's book reached 0.15%
+from mid, io:ANTH's 0.4%. At 3 significant figures the same books reached about 4% (CRWV) and 10% (ANTH); at 2,
+past 40%. So the collector subscribes to each book three times (`depth.sig_figs: [full, 3, 2]`), on three sockets
+because an l2Book message does not say which aggregation it belongs to, and stitches them: finest first, then each
+coarser view beyond the last one's reach. A coarse level can double-count up to one price bucket where two views meet.
+Bands (2%, 5%, 10% each side, in USD) are written every minute with how far the book reached; one full book per
+market per hour goes to `books`, which the stress test walks.
+
+The doc's 5 November figure of about $1.1M of bids within 5% on io:ANTH read $2.0M in the stitched book a few hours
+later. Depth moves by hour, which is why the stress test runs on a range of books (below).
+
+Size: about 35 markets x 1,440 minutes = 50k depth rows a day plus 840 books. With hourly account rows this outgrows
+Neon's free 0.5 GB in days, as the doc says; the paid plan is an open question for the operator.
+
+### Universe
+
+All ten names the doc lists are live. OI on 2026-11-05: xyz:SPCX $162M, xyz:ZHIPU $18M, xyz:LITE $16M, xyz:MRVL $23M,
+xyz:AVGO $9.5M, xyz:TSM $7.8M, xyz:KIOXIA $6.3M, xyz:MINIMAX $2.5M, xyz:AAOI $2.5M, xyz:WDC $2.0M.
+KIOXIA and WDC joined memory names; TSM, AVGO and MRVL silicon; MINIMAX and ZHIPU labs; LITE and AAOI a new Optics
+leg. SPCX got its own leg (SpaceX / xAI): its OI is larger than every lab market's but one, and most of what it
+prices is launch and Starlink, so in Labs it would have drowned the leg. Leg and complex series move from this hour
+for definitional reasons; the site changelog says so.
+
+### Graph
+
+`config/graph.yaml` gives every universe market a node (the stress test shocks names, not tickers: Anthropic is
+xyz:ANT and io:ANTH together) and holds hyperscalers as counterparties without markets. Following the doc, an agent
+drafted edges from filings and reporting with a source on each; every one ships with `verified_at: null`, so none is
+loaded until a person checks it against its source. Until then the graph shocks, graph-against-market and deal
+studies have nothing to read and stay empty; `tape graph --drafts` lists the queue. The loader refuses the whole file
+on any malformed edge (unknown node, type or confidence, no link, a revenue share without a share): a wrong edge
+drives a wrong claim.
+
+### Stress test
+
+The model is in `tape/stress.py` with its simplifications written at the top: maintenance margin is 1/(2 x max
+leverage) without tiers; liquidated positions close in full at market (Hyperliquid liquidates large positions
+partially, and its backstop takes what the book cannot), so forced selling is an upper bound and flow past the book's
+reach is reported as unabsorbed; the book re-forms around the shocked price and does not refill between rounds.
+
+Same-hour depth: each scenario runs on the stored book scaled to the 90th, 50th and 10th percentile of that hour's
+5% depth over four weeks. The published number is the median run and the range is the least and most of the three.
+The range is not ordered by book: a thinner book liquidates the same accounts at lower prices, which can mean fewer
+dollars of selling.
+
+Validation needs no history the tape did not already have. Sweeps before account margin was stored have liquidation
+prices on every position, and the model falls back to them for a cross position without an account row, so episodes
+since 31 October can be replayed now. An episode is a market falling 8% within 24 hours of a sweep; the replay
+evaluates positions at the realized trough (the lowest fill in the window) and compares with liquidations confirmed
+for the same address and market. Recorded liquidations are a floor (see Liquidations above), so the replay errs
+towards predicting more than was recorded.
+
+Publication has three gates, as the doc's plan says: complex coverage at 98%, the model validated (3+ recent episodes
+with $250k+ recorded, 75% within 50%), and a person's wording review. The weekly job always sends the card to
+Telegram, marked NOT FOR POSTING while a gate is open; `tape stress-release <date>` is the review's sign-off and
+refuses while either automatic gate fails. The site serves `/stress/<date>`, its permalinks and its PNGs only for
+released runs.
+
+### Standing series
+
+Computed in the hourly metrics job on the 00:00 UTC hour from daily closes (`candles`): backfilled once from
+`candleSnapshot` by `tape candles`, then extended from each 00:00 UTC mark. Histories are short: on 2026-11-05 xyz:CRWV
+had 283 daily candles, io:ANTH 79 and xyz:ANT 10. Baskets are equal-weight over the markets that have a return that
+day, so the labs basket was mostly io:ANTH and io:OAI before xyz:ANT's candles start.
+
+First values (UTC close of 2026-11-04, 124 days of history): labs and neoclouds 0.42 over 30 days (0.31 on sell-off
+days), labs and chips 0.57 (0.55), labs and memory 0.57 (0.50). Each sits between the 40th and 51st percentile of its
+own history, so nothing alerts.
+
+Alerts fire when a series enters its extreme (95th percentile of its own history, after 60 days of it), at most once a
+week per series, and only after the event warm-up. A deal-study alert fires when a deal the tape watched completes
+its five-day window; old edges are studied but do not page.
+
+### Not built
+
+- **The prediction ledger.** The doc requires a passed backtest before any predictive claim and a public ledger that
+  scores each claim at its horizon. Nothing in this build makes a predictive claim, so there is nothing to log yet.
+- **GPU rental prices** on compute nodes: still an open question in the doc.
+- **Paid data:** none, per the doc's non-goals.

@@ -12,9 +12,11 @@ import logging
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
+from . import standing
 from .cohorts import CohortRules, Position, SideFill, classify_bot, gross_by_address, median_hold_seconds, rank_whales
 from .compute import COMPLEX, HourInputs, MarketCtx, Row, compute_hour, leg_subject, top_positions
 from .events import Event, EventRules, market_events, position_events
+from .graph import Graph, load_graph_file, write_graph
 from .settings import Settings
 from .timeutil import et_day, et_hour, hour_key, utcnow
 
@@ -254,6 +256,9 @@ def publish_definitions(conn, s: Settings) -> None:
         "events": s.t("events"),
         "daily": s.t("daily"),
         "handle": s.t("handle"),
+        "stress": s.t("stress"),
+        "loop": s.t("loop"),
+        "depth": s.t("depth"),
         "legs": {k: {"label": v.label, "markets": list(v.markets)} for k, v in s.universe.legs.items()},
         "leg_order": list(s.universe.leg_order),
     }
@@ -266,7 +271,7 @@ def publish_definitions(conn, s: Settings) -> None:
             )
 
 
-def run_hour(conn, s: Settings, hour: datetime) -> list[Row]:
+def run_hour(conn, s: Settings, hour: datetime, graph: Graph | None = None) -> list[Row]:
     rules = CohortRules.from_config(s.t("cohorts"))
     ctxs = load_ctxs(conn, hour)
     positions = load_positions(conn, hour, set(ctxs))
@@ -353,6 +358,19 @@ def run_hour(conn, s: Settings, hour: datetime) -> list[Row]:
 
     if et_hour(hour) == int(s.t("daily", "snapshot_hour_et")):
         write_daily(conn, s, hour, rows)
+
+    # The standing series are daily: the 00:00 UTC hour closes the day.
+    stats, loop_events = standing.run(conn, s, hour, graph)
+    if stats:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "insert into series (subject, metric, hour, value, coverage) values (%s, %s, %s, %s, null)",
+                [(x.subject, x.metric, hour, x.value) for x in stats],
+            )
+    if loop_events and is_warm(conn, s, hour):
+        n = insert_events(conn, loop_events)
+        if n:
+            log.info("%s: %d standing-series events", hour_key(hour), n)
     return rows
 
 
@@ -387,9 +405,24 @@ def run(conn, s: Settings, hours: list[datetime] | None = None, render: bool = T
         conn.commit()
 
 
+def load_and_write_graph(conn, s: Settings) -> Graph | None:
+    """The financing graph from config/graph.yaml into nodes and edges. A bad
+    file is logged and skipped: it must not stop the positioning metrics."""
+    try:
+        g = load_graph_file()
+        write_graph(conn, g, utcnow().date(), int(s.t("graph", "stale_days")))
+        conn.commit()
+        return g
+    except Exception:
+        conn.rollback()
+        log.exception("graph load failed; the graph-based series are skipped")
+        return None
+
+
 def _run(conn, s: Settings, hours: list[datetime] | None, render: bool) -> list[datetime]:
     publish_definitions(conn, s)
     conn.commit()
+    graph = load_and_write_graph(conn, s)
     hours = hours if hours is not None else pending_hours(conn)
     done: list[datetime] = []
     for h in hours:
@@ -401,7 +434,7 @@ def _run(conn, s: Settings, hours: list[datetime] | None, render: bool) -> list[
         )
         conn.commit()
         try:
-            rows = run_hour(conn, s, h)
+            rows = run_hour(conn, s, h, graph)
             conn.execute(
                 "update runs set finished_at = now(), ok = true, note = %s where job = 'metrics' and key = %s",
                 (f"{len(rows)} rows", key),

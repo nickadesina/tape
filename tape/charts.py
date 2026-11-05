@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from .compute import COMPLEX, leg_subject
-from .events import describe
+from .events import STANDING, describe
 from .render import (
     EXCEL,
     Bar,
@@ -258,7 +258,94 @@ def prune(conn, s: Settings, hour: datetime) -> None:
     )
 
 
+def _days_to_points(series: dict) -> list[tuple[datetime, float, float]]:
+    return [(datetime(d.year, d.month, d.day, tzinfo=UTC), v, 1.0) for d, v in sorted(series.items())]
+
+
+def standing_chart(conn, s: Settings, event: dict) -> bytes:
+    """The chart behind a standing-series alert, drawn from the daily closes."""
+    from . import loop
+    from .graph import load_graph_file
+    from .standing import baskets, load_closes
+
+    cfg = s.t("loop")
+    d = event["detail"] or {}
+    hour = event["time"]
+    closes = load_closes(conn)
+    marker = Marker(event["time"], describe(event["kind"], event["coin"], event["size_usd"], d)[:60])
+    if event["kind"] == "regime_extreme":
+        b = baskets(s)
+        a, x = loop.basket(closes, b[d["anchor"]]), loop.basket(closes, b[d["basket"]])
+        allc = loop.rolling(a, x, int(cfg["corr_days"]), int(cfg["min_days"]))
+        sell = loop.rolling(a, x, int(cfg["selloff_days"]), int(cfg["min_days"]), only=lambda t: a.get(t, 0) < 0)
+        panels = [
+            Panel(
+                f"Co-movement, {d['anchor']} and {d['basket']}",
+                [
+                    Line(f"{cfg['corr_days']}-day", _days_to_points(allc), EXCEL[0]),
+                    Line(f"sell-off days, {cfg['selloff_days']}-day", _days_to_points(sell), EXCEL[1]),
+                ],
+                "num",
+            )
+        ]
+        title = f"Labs and {d['basket']}: do they trade as one?"
+    elif event["kind"] == "tension_extreme":
+        g = load_graph_file()
+        e = next(e for e in g.edges if e.id == d["edge"])
+        xr, yr = loop.node_returns(closes, g, e.src), loop.node_returns(closes, g, e.dst)
+        betas = loop.rolling(
+            xr, yr, int(cfg["tension_days"]), int(cfg["min_days"]), fn=lambda xs, ys: loop.beta(ys, xs)
+        )
+        panels = [
+            Panel(
+                f"{g.nodes[e.dst].name}: beta to {g.nodes[e.src].name} against its revenue share",
+                [
+                    Line(f"beta, {cfg['tension_days']}-day", _days_to_points(betas), EXCEL[0]),
+                    Line("revenue share", _days_to_points({k: e.share for k in betas}), EXCEL[1]),
+                ],
+                "pct",
+            )
+        ]
+        title = f"Graph against market: {g.nodes[e.dst].name} and {g.nodes[e.src].name}"
+    else:
+        g = load_graph_file()
+        e = next(e for e in g.edges if e.id == d["edge"])
+        lines = []
+        for i, (side, key) in enumerate((("src", e.src), ("dst", e.dst))):
+            for c in g.nodes[key].markets:
+                cl = closes.get(c) or {}
+                base = cl.get(e.date - timedelta(days=1))
+                if not base:
+                    continue
+                win = {k: v / base - 1 for k, v in cl.items() if abs((k - e.date).days) <= 10}
+                lines.append(Line(f"{c} ({side})", _days_to_points(win), EXCEL[(2 * i + len(lines)) % len(EXCEL)]))
+        panels = [Panel("Move from the close before the announcement", lines, "pct")]
+        title = f"Deal study: {g.nodes[e.src].name} → {g.nodes[e.dst].name}, {e.date}"
+        marker = Marker(datetime(e.date.year, e.date.month, e.date.day, tzinfo=UTC), "announced")
+    png = render_panels(
+        title=title,
+        panels=panels,
+        footer=footer(s, hour, "Hyperliquid only, one venue. Daily UTC closes."),
+        dashed_below=0.0,
+        size=ChartSize(int(s.t("render", "width_px")), int(s.t("render", "height_px"))),
+        marker=marker,
+    )
+    return png
+
+
 def render_event(conn, s: Settings, event: dict) -> tuple[bytes, datetime] | None:
+    if event["kind"] in STANDING:
+        hour = event["chart_hour"] or event["time"]
+        png = standing_chart(conn, s, event)
+        ChartStore(s.env).put(
+            conn,
+            "event",
+            str(event["id"]),
+            hour,
+            png,
+            (int(s.t("render", "width_px")), int(s.t("render", "height_px"))),
+        )
+        return png, hour
     hour = conn.execute(
         "select max(hour) as h from series where subject = %s and hour <= %s",
         (event["coin"], event["time"] + timedelta(hours=1)),

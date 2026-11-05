@@ -11,5 +11,5 @@ chown -R tape:tape /opt/tape
 sudo -u tape bash -c 'set -a; . /etc/tape/tape.env; /opt/tape/.venv/bin/tape migrate'
 cp deploy/systemd/*.service deploy/systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now tape-indexer.service tape-metrics.timer tape-daily.timer
+systemctl enable --now tape-indexer.service tape-metrics.timer tape-daily.timer tape-stress.timer
 systemctl --no-pager status tape-indexer.service | head -5

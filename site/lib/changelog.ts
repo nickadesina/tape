@@ -4,6 +4,15 @@
 
 export const CHANGELOG: { date: string; change: string }[] = [
   {
+    date: "2026-11-05",
+    change:
+      "AI Leverage Map. New markets: xyz:KIOXIA and xyz:WDC join memory names; xyz:TSM, xyz:AVGO and xyz:MRVL join " +
+      "silicon; new legs Optics (xyz:LITE, xyz:AAOI) and SpaceX / xAI (xyz:SPCX); xyz:MINIMAX and xyz:ZHIPU join labs. " +
+      "Leg and complex series move from this hour for that reason alone. The sweep now stores account margin, and " +
+      "order-book depth is collected every minute. New: the weekly stress test, the financing map, and the " +
+      "one-asset regime, graph-against-market and deal-study series.",
+  },
+  {
     date: "2026-10-31",
     change:
       "Series start. Legs: neoclouds (xyz:CRWV, xyz:NBIS, xyz:IREN, io:NBIS), memory price (xyz:DRAM, io:DRAM), " +

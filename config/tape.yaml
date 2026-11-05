@@ -71,3 +71,54 @@ render:
   width_px: 1200
   height_px: 675
   hourly_retention_days: 30      # db chart store only; s3 keeps everything
+
+# ---- AI Leverage Map (design doc, Nov 5 2026) ------------------------------
+
+depth:
+  # l2Book aggregations, finest first: full precision reaches a fraction of a
+  # percent on most HIP-3 books, so the coarser views carry the bands out to 10%.
+  sig_figs: [full, 3, 2]
+  sample_s: 60
+
+graph:
+  stale_days: 90                 # an edge not re-checked for this long is flagged stale
+
+stress:
+  weekday_et: 6                  # Sunday (Monday is 0)
+  sweep_hour_et: 15              # positions from this sweep; the job runs after it, before Asia opens
+  shocks: [-0.10, -0.20, -0.30]
+  headline_shock: -0.20          # the scenario the card and the Telegram summary lead with
+  node_kinds: [lab, neocloud, memory]
+  graph_shock_kinds: [lab]       # "a lab and everything that depends on it"
+  max_rounds: 10
+  # Depth varies by hour, so every scenario runs on three books: the stored
+  # one scaled to this hour's thick, median and thin 5% depth over the window.
+  depth_window_days: 28
+  depth_quantiles: [0.9, 0.5, 0.1]
+  beta_days: 90                  # co-movement window for graph shocks (sell-off days only)
+  min_beta_days: 15
+  validation:
+    tolerance: 0.5               # predicted forced selling within 50% of recorded liquidations
+    min_move: 0.08               # an episode: a market falls this far ...
+    window_h: 24                 # ... within this many hours of a sweep
+    min_recorded_usd: 250000     # episodes with less recorded than this say nothing
+    min_episodes: 3
+    pass_share: 0.75             # of the recent qualifying episodes, this share must land within tolerance
+    lookback_days: 180
+
+loop:
+  # Baskets for the one-asset regime, as legs. Labs are the anchor: does the
+  # market still tell a lab apart from its landlords and suppliers?
+  anchor: labs
+  baskets:
+    labs: [labs]
+    neoclouds: [neoclouds]
+    chips: [silicon]
+    memory: [memory_names, memory_price]
+  corr_days: 30
+  selloff_days: 90               # sell-off co-movement: days the anchor basket fell, over this window
+  min_days: 15
+  extreme_pctile: 0.95           # alert when a series is at or above this percentile of its own history
+  min_history_days: 60
+  tension_days: 90
+  deal_days: 5

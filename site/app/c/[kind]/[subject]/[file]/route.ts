@@ -1,4 +1,4 @@
-import { chart, chartHour } from "../../../../../lib/queries";
+import { chart, chartHour, latestReleasedStressHour, stressReleased } from "../../../../../lib/queries";
 import { BASE_PATH, chartPng, parseHourKey, unslug } from "../../../../../lib/urls";
 
 // Chart PNGs. A pinned hour never changes, so it is cached for a year;
@@ -9,7 +9,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/c/[kind]/[subject]/
   if (!file.endsWith(".png")) return new Response("not found", { status: 404 });
   const key = file.slice(0, -4);
   if (key === "latest") {
-    const h = await chartHour(kind, subj);
+    const h = kind === "stress" ? await latestReleasedStressHour() : await chartHour(kind, subj);
     if (!h) return new Response("not found", { status: 404 });
     return new Response(null, {
       status: 302,
@@ -18,6 +18,8 @@ export async function GET(_req: Request, ctx: RouteContext<"/c/[kind]/[subject]/
   }
   const hour = parseHourKey(key);
   if (!hour) return new Response("not found", { status: 404 });
+  // An unreleased stress run has not passed its gates: its charts do not exist publicly.
+  if (kind === "stress" && !(await stressReleased(hour))) return new Response("not found", { status: 404 });
   const c = await chart(kind, subj, hour);
   if (!c) return new Response("not found", { status: 404 });
   const headers = {

@@ -13,6 +13,8 @@ Loops, all in one process:
   liq        confirm liquidation candidates from userFillsByTime
   alerts     send pending event alerts to Telegram
   refresh    re-read the universe and the whale set on a schedule
+  depth      subscribe to `l2Book` for every market at each aggregation in
+             `depth.sig_figs`; banded depth every minute, a full book every hour
 
 On a box, `tape index` runs all of them forever (`run`). On Vercel, where a
 function stops after maxDuration, the same loops run as overlapping shifts
@@ -39,6 +41,7 @@ from datetime import datetime, timedelta
 import websockets
 
 from . import alerts
+from .depth import bands_usd, parse_ws_book
 from .events import EventRules, position_events
 from .fills import Fill, estimate_first_fill, from_user_fill, from_ws_trade, liquidated_user
 from .hl import HIGH, LOW, InfoClient, WeightBucket
@@ -88,6 +91,9 @@ class Indexer:
         self.whales: set[str] = set()
         self.marks: dict[str, float] = {}
         self.alerts_from: datetime | None = None
+
+        self.books: dict[tuple[str, str], tuple[float, list, list]] = {}  # (view, coin) -> (t, bids, asks)
+        self.books_written: set[tuple[str, datetime]] = set()
 
         self.last_msg_ms: int | None = None
         self.writing = False
@@ -268,6 +274,107 @@ class Indexer:
                 if (prev > 0 and f.px <= liq * (1 + band)) or (prev < 0 and f.px >= liq * (1 - band)):
                     self.liq_q.put_nowait((addr, f.coin, f.time_ms))
 
+    # ---- depth ---------------------------------------------------------
+
+    def depth_views(self) -> list[str]:
+        return [str(v) for v in self.s.t("depth", "sig_figs")]
+
+    async def depth_loop(self) -> None:
+        """One WebSocket per aggregation: l2Book messages do not say which
+        nSigFigs they were subscribed at, so each view gets its own connection."""
+        views = self.depth_views()
+        await asyncio.gather(*(self._book_feed(v) for v in views), self._depth_sampler(views))
+
+    async def _book_feed(self, view: str) -> None:
+        backoff = 1.0
+        while True:
+            coins = self.universe.coins
+            try:
+                async with websockets.connect(self.s.env.ws_url, ping_interval=None, max_size=2**24) as ws:
+                    for c in coins:
+                        sub: dict = {"type": "l2Book", "coin": c}
+                        if view != "full":
+                            sub["nSigFigs"] = int(view)
+                        await ws.send(json.dumps({"method": "subscribe", "subscription": sub}))
+                    log.info("depth ws (%s) subscribed to %d books", view, len(coins))
+                    backoff = 1.0
+                    pinger = asyncio.create_task(self._ping(ws))
+                    try:
+                        while self.universe.coins == coins:
+                            try:
+                                raw = await asyncio.wait_for(ws.recv(), timeout=5)
+                            except TimeoutError:
+                                continue
+                            msg = json.loads(raw)
+                            if msg.get("channel") == "l2Book":
+                                d = msg["data"]
+                                self.books[(view, d["coin"])] = (time.monotonic(), *parse_ws_book(d))
+                    finally:
+                        pinger.cancel()
+            except (OSError, websockets.WebSocketException) as e:
+                log.warning("depth ws (%s) dropped (%s); reconnecting in %.0fs", view, e, backoff)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60.0)
+
+    def depth_rows(self, views: list[str], now: datetime, max_age_s: float) -> tuple[list[tuple], list[tuple]]:
+        """Minute rows for `depth` and, for markets without one this hour, a row for `books`."""
+        minute = now.replace(second=0, microsecond=0)
+        hour = floor_hour(now)
+        fresh_after = time.monotonic() - max_age_s
+        rows, book_rows = [], []
+        for c in self.universe.coins:
+            got = {v: self.books.get((v, c)) for v in views}
+            got = {v: (b[1], b[2]) for v, b in got.items() if b and b[0] >= fresh_after}
+            if views[0] not in got:
+                continue
+            b = bands_usd([got[v] for v in views if v in got])
+            if not b:
+                continue
+            rows.append(
+                (
+                    c,
+                    minute,
+                    b["mid"],
+                    b["bid2"],
+                    b["bid5"],
+                    b["bid10"],
+                    b["ask2"],
+                    b["ask5"],
+                    b["ask10"],
+                    b["reach_bid"],
+                    b["reach_ask"],
+                )
+            )
+            if (c, hour) not in self.books_written:
+                book_rows.append((c, hour, now, b["mid"], json.dumps(got)))
+        return rows, book_rows
+
+    async def _depth_sampler(self, views: list[str]) -> None:
+        every = float(self.s.t("depth", "sample_s"))
+        while True:
+            await asyncio.sleep(every - (time.time() % every) + 1)  # just after each minute
+            rows, book_rows = self.depth_rows(views, utcnow(), 2 * every)
+            if not rows:
+                continue
+            try:
+                # Two overlapping shifts sample the same minute; the first write wins.
+                async with self.db_lock, self.db.cursor() as cur:
+                    await cur.executemany(
+                        """insert into depth (coin, time, mid, bid2, bid5, bid10, ask2, ask5, ask10, reach_bid, reach_ask)
+                           values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) on conflict do nothing""",
+                        rows,
+                    )
+                    if book_rows:
+                        await cur.executemany(
+                            """insert into books (coin, hour, time, mid, views) values (%s, %s, %s, %s, %s)
+                               on conflict do nothing""",
+                            book_rows,
+                        )
+                self.books_written.update((r[0], r[1]) for r in book_rows)
+                self.stats["depth_rows"] += len(rows)
+            except Exception:
+                log.exception("depth write failed")
+
     # ---- writer --------------------------------------------------------
 
     async def writer_loop(self) -> None:
@@ -344,9 +451,9 @@ class Indexer:
 
     # ---- snapshots -----------------------------------------------------
 
-    def parse_positions(
-        self, state: dict, dex: str
-    ) -> list[tuple[str, float, float | None, float | None, float | None]]:
+    def parse_positions(self, state: dict, dex: str) -> list[tuple]:
+        """(coin, size, entry_px, leverage, liq_px, margin_type, margin_used, position_value)
+        for every nonzero position in the complex on `dex`."""
         out = []
         for ap in state.get("assetPositions") or []:
             p = ap.get("position") or {}
@@ -356,16 +463,26 @@ class Indexer:
             size = float(p.get("szi") or 0)
             if size == 0:
                 continue
-            lev = (p.get("leverage") or {}).get("value")
-            liq = p.get("liquidationPx")
-            out.append((coin, size, _f(p.get("entryPx")), _f(lev), _f(liq)))
+            lev = p.get("leverage") or {}
+            out.append(
+                (
+                    coin,
+                    size,
+                    _f(p.get("entryPx")),
+                    _f(lev.get("value")),
+                    _f(p.get("liquidationPx")),
+                    lev.get("type"),
+                    _f(p.get("marginUsed")),
+                    _f(p.get("positionValue")),
+                )
+            )
         return out
 
     def set_running(self, address: str, dex: str, positions: list[tuple]) -> None:
         for coin in self.universe.coins_on(dex):
             self.positions.pop((address, coin), None)
             self.liq_px.pop((address, coin), None)
-        for coin, size, _entry, _lev, liq in positions:
+        for coin, size, _entry, _lev, liq, *_ in positions:
             self.positions[(address, coin)] = size
             if liq:
                 self.liq_px[(address, coin)] = liq
@@ -460,6 +577,7 @@ class Indexer:
                 (hour, utcnow()),
             )
             await self.db.execute("delete from snapshots where hour = %s", (hour,))
+            await self.db.execute("delete from accounts where hour = %s", (hour,))
         ctx_rows = []
         for dex in self.universe.dexes:
             meta, ctxs = await self.info.meta_and_ctxs(dex)
@@ -492,6 +610,7 @@ class Indexer:
     async def sweep_chunk(self, hour: datetime, targets: list[tuple[str, str]]) -> None:
         sem = asyncio.Semaphore(SWEEP_CONCURRENCY)
         snap_rows: list[tuple] = []
+        acct_rows: list[tuple] = []
         with_pos: list[tuple[str, str]] = []
         swept: list[tuple[str, str]] = []
         errors = 0
@@ -510,17 +629,29 @@ class Indexer:
             swept.append((addr, dex))
             if ps:
                 with_pos.append((addr, dex))
-            for coin, size, entry, lev, liq in ps:
-                snap_rows.append((hour, coin, addr, size, entry, lev, liq))
+                acct = account_row(st, ps)
+                if acct:
+                    acct_rows.append((hour, addr, dex, *acct))
+            for coin, size, entry, lev, liq, mtype, mused, pval in ps:
+                snap_rows.append((hour, coin, addr, size, entry, lev, liq, mtype, mused, pval))
 
         await asyncio.gather(*(one(a, d) for a, d in targets))
         # One transaction per chunk: snapshots and the swept marks land together.
         async with self.db_lock, self.db.transaction(), self.db.cursor() as cur:
             async with cur.copy(
-                "copy snapshots (hour, coin, address, size, entry_px, leverage, liq_px) from stdin"
+                """copy snapshots (hour, coin, address, size, entry_px, leverage, liq_px,
+                                   margin_type, margin_used, position_value) from stdin"""
             ) as cp:
                 for r in snap_rows:
                     await cp.write_row(r)
+            # Account margin lands with its positions: the stress test needs both from the same hour.
+            if acct_rows:
+                async with cur.copy(
+                    """copy accounts (hour, address, dex, account_value, cross_value, margin_used,
+                                      cross_maintenance, ntl_pos, withdrawable, margin_mode) from stdin"""
+                ) as cp:
+                    for r in acct_rows:
+                        await cp.write_row(r)
             # Failed pairs are marked too, so a resumed sweep does not retry them forever;
             # they count as errors and lower the hour's coverage.
             await cur.executemany(
@@ -745,6 +876,7 @@ class Indexer:
         await self.load_universe()
         await self.load_state()
         ws = asyncio.create_task(self.ws_loop())
+        depth = asyncio.create_task(self.depth_loop())
         writer = asyncio.create_task(self.writer_loop())
         self.bg_tasks += [
             asyncio.create_task(c)
@@ -764,7 +896,8 @@ class Indexer:
         await asyncio.gather(*self.bg_tasks, return_exceptions=True)
         await asyncio.sleep(max(0.0, t0 + seconds - time.monotonic()))
         ws.cancel()
-        await asyncio.gather(ws, return_exceptions=True)
+        depth.cancel()
+        await asyncio.gather(ws, depth, return_exceptions=True)
         drain_until = time.monotonic() + 30
         while (not self.fill_q.empty() or self.writing) and time.monotonic() < drain_until:
             await asyncio.sleep(0.25)
@@ -782,6 +915,7 @@ class Indexer:
         await self.load_state()
         tasks = [
             self.ws_loop(),
+            self.depth_loop(),
             self.writer_loop(),
             self.sweep_loop(),
             self.discover_loop(),
@@ -804,6 +938,27 @@ async def insert_events_async(conn, evs) -> None:
                 for e in evs
             ],
         )
+
+
+def account_row(state: dict, positions: list[tuple]) -> tuple | None:
+    """(account_value, cross_value, margin_used, cross_maintenance, ntl_pos,
+    withdrawable, margin_mode) from a clearinghouseState, or None if it has no
+    margin summary."""
+    ms = state.get("marginSummary")
+    if not ms or ms.get("accountValue") in (None, ""):
+        return None
+    cms = state.get("crossMarginSummary") or {}
+    types = {p[5] for p in positions}
+    mode = "mixed" if len(types) > 1 else ("isolated" if types == {"isolated"} else "cross")
+    return (
+        float(ms["accountValue"]),
+        _f(cms.get("accountValue")),
+        _f(ms.get("totalMarginUsed")),
+        _f(state.get("crossMaintenanceMarginUsed")),
+        _f(ms.get("totalNtlPos")),
+        _f(state.get("withdrawable")),
+        mode,
+    )
 
 
 def _f(x) -> float | None:

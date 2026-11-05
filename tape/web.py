@@ -10,6 +10,7 @@ every path but /api/health requires it.
   GET  /api/shift           one WebSocket shift (~11.5 min)
   GET  /api/sweep           advance this hour's sweep, then metrics
   GET  /api/daily[?force=1] the 16:00 ET post
+  GET  /api/stress[?force=1] the weekly stress test (Sunday 16:xx ET)
   POST /api/task            {"args": ["status"]}: run a CLI command
 """
 
@@ -91,6 +92,10 @@ async def app(scope, receive, send):
             out = await worker.sweep(s, started)
         elif path == "/api/daily":
             out = await asyncio.to_thread(worker.daily_job, s, query.get("force") == "1")
+        elif path == "/api/stress":
+            from . import stressjob
+
+            out = await asyncio.to_thread(stressjob.weekly_job, s, query.get("force") == "1")
         elif path == "/api/task" and scope["method"] == "POST":
             args = json.loads(await _body(receive) or b"{}").get("args") or []
             out = await asyncio.to_thread(worker.task, [str(a) for a in args])

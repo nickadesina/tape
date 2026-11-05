@@ -1,0 +1,9 @@
+[Unit]
+Description=Run the stress test Sunday 16:30 ET, after the 15:00 ET sweep and before Asia opens
+
+[Timer]
+OnCalendar=Sun *-*-* 16:30:00 America/New_York
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -185,6 +185,14 @@ def cmd_status(a) -> None:
             f"addresses {c['a']}  seed queue {c['seeds']}  history queue {c['hist']}  fills {c['fills']}  "
             f"last fill {c['last_fill']}  events {c['events']}"
         )
+        d = q("""select (select max(time) from depth) last_depth,
+                   (select count(distinct coin) from depth where time > now() - interval '10 minutes') depth_markets,
+                   (select max(hour) from accounts) last_accounts,
+                   (select count(*) from accounts where hour = (select max(hour) from accounts)) accounts""")[0]
+        print(
+            f"depth: last {d['last_depth']}, {d['depth_markets']} markets in the last 10 min  ·  "
+            f"account margin: {d['accounts']} accounts at {d['last_accounts']}"
+        )
         h = q("select max(hour) h from series")[0]["h"]
         if h:
             print(f"coverage at {h:%Y-%m-%d %H:%M}Z:")
@@ -197,6 +205,109 @@ def cmd_status(a) -> None:
                 print(f"  {r['subject']:22s} {r['value'] * 100:6.1f}%{flag}")
         for r in q("select job, key, ok, note from runs order by started_at desc limit 6"):
             print(f"  run {r['job']:8s} {r['key']}  {'ok' if r['ok'] else r['ok']}  {(r['note'] or '')[:80]}")
+
+
+def cmd_stress(a) -> None:
+    from datetime import date
+
+    from . import stressjob
+
+    out = stressjob.run_week(_settings(), date.fromisoformat(a.day) if a.day else None, send=not a.dry_run)
+    print(json.dumps(out, indent=2, default=str))
+
+
+def cmd_stress_replay(a) -> None:
+    from . import stressjob
+    from .db import connect
+
+    s = _settings()
+    with connect(s.env.database_url) as conn:
+        rows = stressjob.replay(conn, s, a.days)
+        gate = stressjob.validation(conn, s)
+    for r in rows:
+        ratio = "n/a" if r["ratio"] is None else f"{r['ratio']:.2f}"
+        print(
+            f"{r['start_hour']:%Y-%m-%d %H}Z {r['coin']:12s} {r['move'] * 100:+6.1f}%  predicted "
+            f"${r['predicted_usd'] / 1e6:8.2f}M  recorded ${r['recorded_usd'] / 1e6:8.2f}M  ratio {ratio}  "
+            f"{'within' if r['within'] else 'outside'}"
+        )
+    print("model validated:" if gate["model_validated"] else "model NOT validated:", gate["why"])
+
+
+def cmd_stress_release(a) -> None:
+    from datetime import date
+
+    from .stressjob import release
+
+    print(release(_settings(), date.fromisoformat(a.day)))
+
+
+def cmd_graph(a) -> None:
+    from datetime import date
+
+    from .graph import load_graph_file
+
+    s = _settings()
+    g = load_graph_file()
+    today = date.today()
+    stale = int(s.t("graph", "stale_days"))
+    print(f"{len(g.nodes)} nodes, {len(g.edges)} verified edges, {len(g.drafts)} drafts")
+    unpriced = sorted(set(s.universe.markets_all()) - set(g.node_of_market()))
+    if unpriced:
+        print("markets in the universe with no node:", " ".join(unpriced))
+    for e in g.edges:
+        if e.stale(today, stale):
+            print(f"  stale  {e.id:28s} verified {e.verified_at}")
+    if a.drafts:
+        for e in g.drafts:
+            size = "" if e.size_usd is None else f" ${e.size_usd / 1e9:,.1f}B"
+            print(f"  draft  {e.id:28s} {e.src} -> {e.dst} {e.type}{size} ({e.confidence}) {e.source}")
+    for k, x in sorted(g.exposures().items()):
+        if x:
+            print(f"  {k:16s} {x}")
+
+
+def cmd_candles(a) -> None:
+    from .db import connect
+    from .hl import InfoClient, WeightBucket
+    from .timeutil import from_ms, ms, utcnow
+
+    s = _settings()
+    coins = sorted(s.universe.markets_all())
+    end = utcnow()
+
+    async def go():
+        ix = s.t("indexer")
+        info = InfoClient(
+            s.env.info_url, WeightBucket(float(ix["info_weight_per_minute"]) * float(ix["budget_fraction"]))
+        )
+        out = {}
+        try:
+            for c in coins:
+                try:
+                    out[c] = await info.candles(c, "1d", ms(end) - a.days * 86_400_000, ms(end))
+                except Exception as e:
+                    print(f"  {c}: {e}")
+        finally:
+            await info.close()
+        return out
+
+    got = asyncio.run(go())
+    today = end.date()
+    rows = [
+        (c, from_ms(int(k["t"])).date(), float(k["c"]))
+        for c, ks in got.items()
+        for k in ks
+        if from_ms(int(k["t"])).date() < today  # today's candle is not closed
+    ]
+    with connect(s.env.database_url) as conn, conn.cursor() as cur:
+        cur.executemany(
+            """insert into candles (coin, day, close, source) values (%s, %s, %s, 'candle')
+               on conflict (coin, day) do update set close = excluded.close, source = 'candle'""",
+            rows,
+        )
+        conn.commit()
+    print(f"stored {len(rows)} daily closes for {len(got)} markets")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -233,6 +344,22 @@ def main(argv: list[str] | None = None) -> None:
     sd.add_argument("--min-account-value", type=float, default=25_000)
     sd.set_defaults(fn=cmd_seed)
     sub.add_parser("status", help="sweeps, queues, coverage").set_defaults(fn=cmd_status)
+    st = sub.add_parser("stress", help="the weekly stress test on real positions")
+    st.add_argument("--day", help="ET date of the run (default: the latest stress weekday)")
+    st.add_argument("--dry-run", action="store_true", help="compute and store, do not send")
+    st.set_defaults(fn=cmd_stress)
+    sr = sub.add_parser("stress-replay", help="replay recorded drawdowns against recorded liquidations")
+    sr.add_argument("--days", type=int, help="window, default stress.validation.lookback_days")
+    sr.set_defaults(fn=cmd_stress_replay)
+    rl = sub.add_parser("stress-release", help="publish a stress run on the site, after the wording review")
+    rl.add_argument("day")
+    rl.set_defaults(fn=cmd_stress_release)
+    gr = sub.add_parser("graph", help="check config/graph.yaml: nodes, verified edges, stale edges, drafts")
+    gr.add_argument("--drafts", action="store_true", help="list the draft edges awaiting verification")
+    gr.set_defaults(fn=cmd_graph)
+    cd = sub.add_parser("candles", help="backfill daily closes for the standing series")
+    cd.add_argument("--days", type=int, default=400)
+    cd.set_defaults(fn=cmd_candles)
     a = p.parse_args(argv)
     a.fn(a)
 

@@ -17,6 +17,12 @@ WHALE_NET_MOVE = "whale_net_move"
 FUNDING = "funding"
 PREMIUM = "premium"
 LIQUIDATIONS = "liquidations"
+# The standing series (tape/loop.py). Their subject is not a market: a basket
+# pair (regime:labs~neoclouds) or a graph edge (edge:<id>).
+REGIME_EXTREME = "regime_extreme"
+TENSION_EXTREME = "tension_extreme"
+DEAL_STUDY = "deal_study"
+STANDING = {REGIME_EXTREME, TENSION_EXTREME, DEAL_STUDY}
 
 
 @dataclass(frozen=True)
@@ -177,4 +183,28 @@ def describe(kind: str, coin: str, size_usd: float | None, detail: dict[str, Any
         return f"{coin} mark {detail['premium_bps']:+.0f} bps to oracle"
     if kind == LIQUIDATIONS:
         return f"{usd(size_usd)} liquidated on {coin} in one hour, {detail['liq_share'] * 100:.1f}% of OI"
+    if kind == REGIME_EXTREME:
+        since = detail.get("since")
+        when = (
+            f"its highest since {since}"
+            if since
+            else f"its highest since the series began ({detail.get('history_from')})"
+        )
+        return f"Labs and {detail.get('basket')} now trade as one: 30-day co-movement {detail['corr']:.2f}, {when}"
+    if kind == TENSION_EXTREME:
+        return (
+            f"{detail.get('dst_name', detail.get('dst'))} gets ~{detail['share'] * 100:.0f}% of revenue from "
+            f"{detail.get('src_name', detail.get('src'))}, yet moves {detail['beta'] * 100:.0f}% when it does"
+        )
+    if kind == DEAL_STUDY:
+
+        def pc(x):
+            return "n/a" if x is None else f"{x * 100:+.1f}%"
+
+        loop_txt = "circular deal" if detail.get("circular") else "deal"
+        return (
+            f"{detail.get('src_name')} → {detail.get('dst_name')} {loop_txt} ({detail.get('date')}): "
+            f"{detail.get('dst_name')} {pc(detail.get('dst_day0'))} on the day, {pc(detail.get('dst_day_n'))} "
+            f"after {detail.get('days')} days"
+        )
     return f"{kind} {coin}"

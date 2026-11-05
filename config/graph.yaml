@@ -1,0 +1,69 @@
+# The financing graph: who invests in, buys from and lends to whom across the
+# AI build-out, with a source on every edge (AI Leverage Map design doc).
+#
+# Nodes are companies and funds. `markets` lists the Hyperliquid markets that
+# price a node; a node without one stays in the graph as a counterparty. Every
+# market in config/universe.yaml belongs to exactly one node, so the stress
+# test can shock a name rather than a ticker.
+#
+# Edges: direction follows the money (`from` pays, invests, lends or buys).
+#   type        equity | compute_contract | supply | debt_lease | revenue_concentration | guarantee
+#   size_usd    as disclosed, or null
+#   status      announced (LOI, MoU, "up to") | contracted (signed, filed)
+#   tenor       as disclosed, free text
+#   share       revenue_concentration only: the share of `to`'s revenue from `from`
+#   date        when it was disclosed
+#   source      a filing, a company announcement or reporting, linked
+#   confidence  filed | company | reported
+#   verified_at the last time a person checked the edge against its source.
+#               An edge without it is a draft: it is not loaded, nothing reads
+#               it, and `tape graph` lists it. Edges older than
+#               graph.stale_days (config/tape.yaml) are flagged stale.
+#
+# Corrections to a published edge get a line under `corrections`; the map page
+# shows them.
+
+nodes:
+  # Labs
+  anthropic: {name: Anthropic, kind: lab, public: false, markets: [xyz:ANT, io:ANTH]}
+  openai: {name: OpenAI, kind: lab, public: false, markets: [io:OAI]}
+  spacex: {name: SpaceX (xAI), kind: lab, public: false, markets: [xyz:SPCX], note: "SpaceX holds xAI"}
+  minimax: {name: MiniMax, kind: lab, public: true, markets: [xyz:MINIMAX]}
+  zhipu: {name: Zhipu AI, kind: lab, public: true, markets: [xyz:ZHIPU]}
+  # Neoclouds
+  coreweave: {name: CoreWeave, kind: neocloud, public: true, markets: [xyz:CRWV]}
+  nebius: {name: Nebius, kind: neocloud, public: true, markets: [xyz:NBIS, io:NBIS]}
+  iren: {name: IREN, kind: neocloud, public: true, markets: [xyz:IREN]}
+  # Chips
+  nvidia: {name: Nvidia, kind: chip, public: true, markets: [xyz:NVDA, io:NVDA]}
+  amd: {name: AMD, kind: chip, public: true, markets: [xyz:AMD]}
+  intel: {name: Intel, kind: chip, public: true, markets: [xyz:INTC]}
+  tsmc: {name: TSMC, kind: chip, public: true, markets: [xyz:TSM]}
+  broadcom: {name: Broadcom, kind: chip, public: true, markets: [xyz:AVGO]}
+  marvell: {name: Marvell, kind: chip, public: true, markets: [xyz:MRVL]}
+  # Optics
+  lumentum: {name: Lumentum, kind: optics, public: true, markets: [xyz:LITE]}
+  aaoi: {name: Applied Optoelectronics, kind: optics, public: true, markets: [xyz:AAOI]}
+  # Memory
+  micron: {name: Micron, kind: memory, public: true, markets: [xyz:MU]}
+  sk_hynix: {name: SK Hynix, kind: memory, public: true, markets: [xyz:SKHX, xyz:SKHY]}
+  samsung: {name: Samsung Electronics, kind: memory, public: true, markets: [xyz:SMSN]}
+  sandisk: {name: SanDisk, kind: memory, public: true, markets: [xyz:SNDK, io:SNDK]}
+  cxmt: {name: CXMT, kind: memory, public: true, markets: [xyz:CXMT]}
+  kioxia: {name: Kioxia, kind: memory, public: true, markets: [xyz:KIOXIA]}
+  western_digital: {name: Western Digital, kind: memory, public: true, markets: [xyz:WDC]}
+  # Baskets that trade on Hyperliquid. They are not companies, so no edge
+  # points at them; they are here so every market has a node.
+  memory_etf: {name: Roundhill Memory ETF, kind: fund, public: true, markets: [xyz:DRAM, io:DRAM]}
+  lyte_etf: {name: LYTE ETF, kind: fund, public: true, markets: [xyz:LYTE]}
+  ncld_etf: {name: NCLD ETF, kind: fund, public: true, markets: [xyz:NCLD]}
+  # Hyperscalers: counterparties, not priced on the tape
+  microsoft: {name: Microsoft, kind: hyperscaler, public: true}
+  google: {name: Alphabet (Google), kind: hyperscaler, public: true}
+  amazon: {name: Amazon, kind: hyperscaler, public: true}
+  meta: {name: Meta, kind: hyperscaler, public: true}
+  oracle: {name: Oracle, kind: hyperscaler, public: true}
+
+edges: []
+
+corrections: []

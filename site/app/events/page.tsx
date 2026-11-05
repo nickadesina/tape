@@ -13,6 +13,9 @@ const KIND: Record<string, string> = {
   funding: "funding",
   premium: "premium",
   liquidations: "liquidations",
+  regime_extreme: "one-asset regime",
+  tension_extreme: "graph against market",
+  deal_study: "deal study",
 };
 
 function what(e: { kind: string; detail: Record<string, number | string | null> }): string {
@@ -31,6 +34,14 @@ function what(e: { kind: string; detail: Record<string, number | string | null> 
       return `${(n("premium_bps") ?? 0).toFixed(0)} bp to oracle`;
     case "liquidations":
       return `${((n("liq_share") ?? 0) * 100).toFixed(1)}% of OI in 1h`;
+    case "regime_extreme":
+      return `labs and ${d.basket}: co-movement ${(n("corr") ?? 0).toFixed(2)}${d.since ? `, highest since ${d.since}` : ", highest on record"}`;
+    case "tension_extreme":
+      return `${d.dst_name} moves ${((n("beta") ?? 0) * 100).toFixed(0)}% with ${d.src_name} on a ${((n("share") ?? 0) * 100).toFixed(0)}% revenue share`;
+    case "deal_study": {
+      const f = (k: string) => (n(k) == null ? "n/a" : `${((n(k) as number) * 100).toFixed(1)}%`);
+      return `${d.src_name} → ${d.dst_name}: receiver ${f("dst_day0")} day 0, ${f("dst_day_n")} day ${d.days}`;
+    }
     default:
       return "";
   }
@@ -63,7 +74,11 @@ export default async function Events() {
               <tr key={e.id}>
                 <td>{utc(e.time)}</td>
                 <td>
-                  <Link href={`/m/${slug(e.coin)}`}>{e.coin}</Link>
+                  {e.coin.includes(":") && !/^(regime|edge):/.test(e.coin) ? (
+                    <Link href={`/m/${slug(e.coin)}`}>{e.coin}</Link>
+                  ) : (
+                    <Link href="/map">{e.coin.replace(/^(regime|edge):/, "")}</Link>
+                  )}
                 </td>
                 <td>{KIND[e.kind] ?? e.kind}</td>
                 <td>{what(e)}</td>

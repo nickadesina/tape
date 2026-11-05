@@ -10,6 +10,8 @@ the same work is cut into pieces that each finish in time:
           the last invocation stopped, then run metrics and charts once the
           hour is finished.
   daily   16:00 ET (two UTC schedules; only the one that lands on 16:00 ET runs).
+  stress  Sunday 16:30 ET, after the 15:00 ET sweep and before Asia opens
+          (two UTC schedules; only the one that lands on 16:xx ET runs).
 """
 
 from __future__ import annotations
@@ -42,6 +44,11 @@ TASKS = {
     "match",
     "seed-leaderboard",
     "status",
+    "stress",
+    "stress-replay",
+    "stress-release",
+    "graph",
+    "candles",
 }
 
 

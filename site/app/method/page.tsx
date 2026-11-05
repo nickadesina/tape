@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { definitions } from "../../lib/queries";
 import { HANDLE } from "../../lib/urls";
 
@@ -11,6 +12,16 @@ type Defs = {
   daily?: Record<string, number>;
   legs?: Record<string, { label: string; markets: string[] }>;
   leg_order?: string[];
+  stress?: {
+    shocks?: number[];
+    node_kinds?: string[];
+    max_rounds?: number;
+    depth_window_days?: number;
+    beta_days?: number;
+    validation?: Record<string, number>;
+  };
+  loop?: Record<string, number | string>;
+  graph?: { edges?: number; drafts?: number; stale_days?: number };
 };
 
 const usd = (x?: number) => (x == null ? "?" : `$${x.toLocaleString("en-US")}`);
@@ -21,6 +32,9 @@ export default async function Method() {
   const c = d.cohorts ?? {};
   const e = d.events ?? {};
   const cov = d.coverage ?? {};
+  const st = d.stress ?? {};
+  const v = st.validation ?? {};
+  const lp = d.loop ?? {};
   return (
     <>
       <h1>Method</h1>
@@ -123,6 +137,98 @@ export default async function Method() {
         Liquidations are candidates when an address&apos;s position shrinks on a fill within 1% of its last snapshot
         liquidation price, and are counted only once that address&apos;s own fill history marks the fill as a
         liquidation.
+      </p>
+
+      <h2 id="margin">Account margin and order-book depth</h2>
+      <p>
+        The hourly <code>clearinghouseState</code> snapshot also returns each account&apos;s margin: account value, margin
+        used, maintenance margin, and whether each position is cross or isolated. Margin on a HIP-3 dex is per dex, so
+        an account on xyz and the same address on io are two accounts. The tape stores it for every account with a
+        position in the complex, in the same transaction as the positions. Order-book depth comes from the public{" "}
+        <code>l2Book</code> WebSocket: banded depth (USD within 2%, 5% and 10% of mid, each side) every minute, and a
+        full book every hour. Hyperliquid sends at most 20 levels a side, which at full precision reaches a fraction of
+        a percent on most of these books, so the tape also subscribes to the same book aggregated to 3 and 2 significant
+        figures and stitches the views: the finest one out to where it stops, then each coarser one beyond. A coarse
+        level can overlap the last fine one by up to one price bucket.
+      </p>
+
+      <h2 id="stress">Stress test</h2>
+      <p>
+        Every Sunday the test takes the 15:00 ET snapshot (every position, its leverage and liquidation price, each
+        account&apos;s margin) and that hour&apos;s books, and shocks each{" "}
+        {(st.node_kinds ?? ["lab", "neocloud", "memory"]).join(", ")} name by{" "}
+        {(st.shocks ?? [-0.1, -0.2, -0.3]).map((x) => p(x)).join(", ")}. A name with markets on two venues (Anthropic on
+        xyz and io) moves on both. A graph shock also moves every name whose revenue runs through the shocked lab, by
+        its measured co-movement with that lab on the days it fell (last {st.beta_days ?? 90} days).
+      </p>
+      <ol>
+        <li>Move the shocked markets by the shock.</li>
+        <li>
+          Recompute every account&apos;s equity and maintenance margin at the new prices: per account for cross margin
+          (cross account value plus the PnL of its complex positions; positions outside the complex are held at their
+          snapshot price), per position for isolated (its liquidation price). Maintenance margin is half the initial
+          margin at the market&apos;s maximum leverage.
+        </li>
+        <li>Mark accounts below maintenance as liquidated and turn their positions into forced market orders.</li>
+        <li>
+          Walk each market&apos;s book with the forced flow to get the new price. The book re-forms around the shocked
+          price and does not refill between rounds.
+        </li>
+        <li>Repeat until no new account breaches, or {st.max_rounds ?? 10} rounds.</li>
+        <li>
+          Report forced notional by market and round, the price path, the number of accounts hit (never which), and the
+          amplification: the shocked name&apos;s final drawdown over the initial shock.
+        </li>
+      </ol>
+      <p>
+        Depth varies by hour, so every scenario runs three times: on the stored book scaled to the thick, median and thin
+        5% depth for that hour over the last {st.depth_window_days ?? 28} days. The published figure is the median run;
+        the range is the other two. Hyperliquid liquidates large positions partially and its backstop vault can absorb
+        what the book cannot; the model closes positions in full at market and reports any flow past the book&apos;s reach
+        separately, so forced selling is an upper bound.
+      </p>
+      <p>
+        <b>Validation.</b> The model is only worth publishing once it reproduces what happened. Every drawdown of{" "}
+        {p(v.min_move)} or more within {v.window_h ?? 24} hours of a snapshot is replayed: take that snapshot, apply the
+        realized move, and compare the forced selling the model predicts with the liquidations the tape confirmed for
+        the same positions. A run is published only when at least {v.min_episodes ?? 3} recent episodes with{" "}
+        {usd(v.min_recorded_usd)} or more of recorded liquidations exist and {p(v.pass_share)} of them land within{" "}
+        {p(v.tolerance)}; when complex coverage is at the bar; and after a person has reviewed the wording.
+      </p>
+
+      <h2 id="graph">The financing map</h2>
+      <p>
+        A hand-checked file of who invests in, buys from, supplies and lends to whom, with a linked filing, company
+        announcement or report on every edge, its disclosure date and a confidence (filed, company-stated or reported).
+        &ldquo;Announced&rdquo; (letters of intent, &ldquo;up to&rdquo;) is kept apart from &ldquo;contracted&rdquo;. An
+        agent drafts edges; a person verifies each one before it ships, and edges not re-checked in{" "}
+        {d.graph?.stale_days ?? 90} days are marked stale. Corrections are logged on the <Link href="/map">map</Link> page.
+        Currently {d.graph?.edges ?? 0} verified edges.
+      </p>
+
+      <h2 id="series">Standing series</h2>
+      <ul>
+        <li>
+          One-asset regime: co-movement (correlation of daily returns) between the labs basket and the neocloud, chip
+          and memory baskets, over {lp.corr_days ?? 30} days and over sell-off days only (days the labs basket fell,{" "}
+          {lp.selloff_days ?? 90} days). It alerts when co-movement reaches the {p(Number(lp.extreme_pctile ?? 0.95))}{" "}
+          percentile of its own history, once there are {lp.min_history_days ?? 60} days of it.
+        </li>
+        <li>
+          Graph against market: for each disclosed revenue share between two tradable names, the dependent name&apos;s
+          beta to its counterparty over {lp.tension_days ?? 90} days against the share. The gap either way is the
+          finding: an exposure the market ignores, or one it overprices.
+        </li>
+        <li>
+          Deal studies: every dated edge is an event. Both names&apos; moves on the announcement day and{" "}
+          {lp.deal_days ?? 5} days later, from the close the day before, and whether the deal is circular (money leaving
+          the receiver comes back to the payer within three edges).
+        </li>
+      </ul>
+      <p>
+        Returns come from daily UTC closes on Hyperliquid. These series describe the market now; none is a prediction.
+        A predictive claim (&ldquo;when X, Y follows&rdquo;) is published only after it passes a backtest and is logged
+        with its horizon.
       </p>
 
       <h2>What the tape cannot see</h2>

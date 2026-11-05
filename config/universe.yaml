@@ -15,6 +15,13 @@
 #     either relists, it joins the tape without a code change.
 #   - io: also lists DRAM, SNDK, NVDA, NBIS. They are the same bets on a second
 #     venue, so they sit in the same legs.
+#
+# 2026-11-05 (AI Leverage Map design doc): the pre-IPO and chain names
+# Hyperliquid already lists join the complex, so the stress test and the
+# financing graph can price them. Memory: KIOXIA, WDC. Silicon: TSM, AVGO,
+# MRVL. Optics (new leg): LITE, AAOI. Labs: MINIMAX, ZHIPU. xyz:SPCX, the
+# SpaceX pre-IPO perp, gets its own leg. A name the chain does not list is
+# dropped at startup as usual.
 
 dexes: [xyz, io]
 
@@ -30,40 +37,39 @@ legs:
     markets: [xyz:DRAM, io:DRAM]
   memory_names:
     label: Memory names
-    markets: [xyz:MU, xyz:SKHX, xyz:SKHY, xyz:SMSN, xyz:SNDK, xyz:CXMT, io:SNDK]
+    markets: [xyz:MU, xyz:SKHX, xyz:SKHY, xyz:SMSN, xyz:SNDK, xyz:CXMT, io:SNDK, xyz:KIOXIA, xyz:WDC]
   silicon:
     label: Silicon
-    markets: [xyz:NVDA, xyz:AMD, xyz:INTC, io:NVDA]
+    markets: [xyz:NVDA, xyz:AMD, xyz:INTC, io:NVDA, xyz:TSM, xyz:AVGO, xyz:MRVL]
+  optics:
+    label: Optics
+    markets: [xyz:LITE, xyz:AAOI]
   etfs:
     label: Compute ETFs
     markets: [xyz:LYTE, xyz:NCLD]
   labs:
     label: Labs
-    markets: [xyz:ANT, io:OAI, io:ANTH]
+    markets: [xyz:ANT, io:OAI, io:ANTH, xyz:MINIMAX, xyz:ZHIPU]
+  # SpaceX holds xAI, but most of what SPCX prices is launch and Starlink, so
+  # it sits beside the labs rather than in the leg.
+  spacex:
+    label: SpaceX / xAI
+    markets: [xyz:SPCX]
   gpu_hour:
     label: GPU-hour
     markets: [xyz:H100, io:H100]
 
 # Leg order on charts, top to bottom in the legend.
-leg_order: [neoclouds, memory_price, memory_names, silicon, etfs, labs, gpu_hour]
+leg_order: [neoclouds, memory_price, memory_names, silicon, optics, etfs, labs, spacex, gpu_hour]
 
 # Candidates seen in live meta that fit the complex but are not in it yet.
 # `tape universe` prints these separately from wholly unclassified listings.
 # Move one into a leg above to add it; nothing else changes.
 candidates:
-  - xyz:KIOXIA   # NAND, memory names
-  - xyz:WDC      # storage, memory names
-  - xyz:MINIMAX  # Chinese lab, listed in HK
-  - xyz:ZHIPU    # Chinese lab, listed in HK
   - xyz:SMH      # semis ETF
   - xyz:SOXL     # 3x semis ETF, heavy volume
-  - xyz:AVGO
-  - xyz:MRVL
   - xyz:ARM
-  - xyz:TSM
   - xyz:ASML
-  - xyz:LITE
-  - xyz:AAOI
 
 # Names a post can use for a market. Used by `tape match` to attach the right
 # chart to a quote-ride alert. Matching is case-insensitive on word boundaries;
@@ -92,3 +98,13 @@ aliases:
   io:ANTH: [Anthropic]
   io:OAI: [OpenAI, ChatGPT, Sam Altman]
   xyz:H100: [H100, GPU-hour, GPU rental]
+  xyz:KIOXIA: [Kioxia]
+  xyz:WDC: [Western Digital, $WDC]
+  xyz:TSM: [TSMC, Taiwan Semiconductor, $TSM]
+  xyz:AVGO: [Broadcom, $AVGO]
+  xyz:MRVL: [Marvell, $MRVL]
+  xyz:LITE: [Lumentum, $LITE]
+  xyz:AAOI: [Applied Optoelectronics, $AAOI]
+  xyz:SPCX: [SpaceX, xAI, Grok]
+  xyz:MINIMAX: [MiniMax]
+  xyz:ZHIPU: [Zhipu, Z.ai, GLM]

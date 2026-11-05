@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Chart } from "../../../../../components/Chart";
 import { et, utc } from "../../../../../lib/format";
-import { chart } from "../../../../../lib/queries";
+import { chart, stressReleased } from "../../../../../lib/queries";
 import { chartPng, parseHourKey, slug, unslug } from "../../../../../lib/urls";
 
 // A permalink pins the hour: the chart quoted in an argument stays the chart it was.
@@ -14,12 +14,13 @@ export async function generateStaticParams() {
   return [];
 }
 
-const KINDS = new Set(["home", "daily", "legs", "market", "card", "event"]);
+const KINDS = new Set(["home", "daily", "legs", "market", "card", "event", "stress"]);
 
 async function resolve(props: PageProps<"/p/[kind]/[subject]/[hour]">) {
   const { kind, subject, hour } = await props.params;
   const h = parseHourKey(hour);
   if (!KINDS.has(kind) || !h) return null;
+  if (kind === "stress" && !(await stressReleased(h))) return null;
   const subj = unslug(decodeURIComponent(subject));
   const c = await chart(kind, subj, h);
   return c ? { kind, subject: subj, hour: h, chart: c } : null;
@@ -29,6 +30,7 @@ function title(kind: string, subject: string): string {
   if (kind === "home" || kind === "daily") return "Whale net positioning, AI complex";
   if (kind === "legs") return "Whale net by leg";
   if (kind === "event") return `Event ${subject}`;
+  if (kind === "stress") return subject === "top" ? "Stress test: the largest cascade" : "Stress test: forced selling by scenario";
   return `${subject.replace("@", ", ")} positioning`;
 }
 

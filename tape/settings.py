@@ -32,6 +32,9 @@ class UniverseConfig:
     candidates: tuple[str, ...]
     aliases: dict[str, tuple[str, ...]]
 
+    def markets_all(self) -> list[str]:
+        return [m for leg in self.legs.values() for m in leg.markets]
+
     def leg_of(self, coin: str) -> str | None:
         for leg in self.legs.values():
             if coin in leg.markets:

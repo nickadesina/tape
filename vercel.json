@@ -22,6 +22,14 @@
     {
       "path": "/api/daily",
       "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/stress",
+      "schedule": "30 20 * * 0"
+    },
+    {
+      "path": "/api/stress",
+      "schedule": "30 21 * * 0"
     }
   ]
 }

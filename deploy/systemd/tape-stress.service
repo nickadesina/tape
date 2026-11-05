@@ -1,0 +1,9 @@
+[Unit]
+Description=Positioning Tape weekly stress test to Telegram
+
+[Service]
+Type=oneshot
+User=tape
+WorkingDirectory=/opt/tape
+EnvironmentFile=/etc/tape/tape.env
+ExecStart=/opt/tape/.venv/bin/tape stress
