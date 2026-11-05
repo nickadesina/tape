@@ -310,6 +310,37 @@ def cmd_candles(a) -> None:
     print(f"stored {len(rows)} daily closes for {len(got)} markets")
 
 
+def cmd_stack(a) -> None:
+    from .modeljob import check
+
+    print("\n".join(check(a.drafts)))
+
+
+def cmd_model(a) -> None:
+    from datetime import date
+
+    from . import modeljob
+
+    out = modeljob.run(_settings(), date.fromisoformat(a.day) if a.day else None, drafts=a.drafts, store=not a.dry_run)
+    print(json.dumps(out, indent=2, default=str))
+
+
+LOADERS = ("edgar", "taiwan", "korea", "rents")
+
+
+def cmd_load(a) -> None:
+    from .loaders import edgar, korea, sfcompute, taiwan
+
+    mods = {"edgar": edgar, "taiwan": taiwan, "korea": korea, "rents": sfcompute}
+    s = _settings()
+    for name in a.which or ["edgar", "taiwan", "korea"]:
+        try:
+            out = mods[name].load(s)
+        except Exception as e:  # one source down must not stop the others
+            out = {"error": f"{type(e).__name__}: {e}"}
+        print(name, json.dumps(out, default=str))
+
+
 def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -344,7 +375,7 @@ def main(argv: list[str] | None = None) -> None:
     sd.add_argument("--min-account-value", type=float, default=25_000)
     sd.set_defaults(fn=cmd_seed)
     sub.add_parser("status", help="sweeps, queues, coverage").set_defaults(fn=cmd_status)
-    st = sub.add_parser("stress", help="the weekly stress test on real positions")
+    st = sub.add_parser("stress", help="the stress test on real positions (monthly exhibit)")
     st.add_argument("--day", help="ET date of the run (default: the latest stress weekday)")
     st.add_argument("--dry-run", action="store_true", help="compute and store, do not send")
     st.set_defaults(fn=cmd_stress)
@@ -360,6 +391,17 @@ def main(argv: list[str] | None = None) -> None:
     cd = sub.add_parser("candles", help="backfill daily closes for the standing series")
     cd.add_argument("--days", type=int, default=400)
     cd.set_defaults(fn=cmd_candles)
+    sk = sub.add_parser("stack", help="check config/stack: what loads, what is a draft")
+    sk.add_argument("--drafts", action="store_true", help="list draft figures, judgments and comparisons")
+    sk.set_defaults(fn=cmd_stack)
+    md = sub.add_parser("model", help="the daily model run: estimates, gaps, scenarios, forecast scores")
+    md.add_argument("--day", help="UTC date, default today")
+    md.add_argument("--drafts", action="store_true", help="treat drafts as verified; stores nothing")
+    md.add_argument("--dry-run", action="store_true", help="compute without storing")
+    md.set_defaults(fn=cmd_model)
+    ld = sub.add_parser("load", help="run loaders: edgar, taiwan, korea (default: all three) or rents")
+    ld.add_argument("which", nargs="*", choices=LOADERS)
+    ld.set_defaults(fn=cmd_load)
     a = p.parse_args(argv)
     a.fn(a)
 

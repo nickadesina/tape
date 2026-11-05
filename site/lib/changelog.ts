@@ -6,6 +6,14 @@ export const CHANGELOG: { date: string; change: string }[] = [
   {
     date: "2026-11-05",
     change:
+      "Stack Engine. New: the stack model (a sourced, bottom-up model of the AI supply chain, with every revision " +
+      "logged), the daily gaps between what the model says is possible and what the market prices, scenarios, the " +
+      "forecast ledger, and research pages. The stress test becomes a monthly exhibit, the fragility of the " +
+      "market's view.",
+  },
+  {
+    date: "2026-11-05",
+    change:
       "AI Leverage Map. New markets: xyz:KIOXIA and xyz:WDC join memory names; xyz:TSM, xyz:AVGO and xyz:MRVL join " +
       "silicon; new legs Optics (xyz:LITE, xyz:AAOI) and SpaceX / xAI (xyz:SPCX); xyz:MINIMAX and xyz:ZHIPU join labs. " +
       "Leg and complex series move from this hour for that reason alone. The sweep now stores account margin, and " +

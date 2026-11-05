@@ -25,6 +25,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Link href="/events">events</Link>
             <Link href="/stress">stress</Link>
             <Link href="/map">map</Link>
+            <Link href="/stack">stack</Link>
+            <Link href="/gaps">gaps</Link>
+            <Link href="/scenarios">scenarios</Link>
+            <Link href="/ledger">ledger</Link>
+            <Link href="/research">research</Link>
             <Link href="/method">method</Link>
             <Link href="/data">data</Link>
           </nav>

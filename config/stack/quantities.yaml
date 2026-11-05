@@ -1,0 +1,71 @@
+# Figures a person entered from a source, and the estimates the model computes.
+#
+# quantities: one figure from one source.
+#   key          <entity>.<metric>
+#   unit         usd | usd_per_year | usd_per_gpu_hour | gpus | units | mw | gb | wafers_per_month | ...
+#   period       a date (a level at that date) or [start, end] (a flow over it)
+#   value        as stated
+#   range        [lo, hi] when the source rounds or hedges ("approximately", "nearly")
+#   kind         filed | company (company-stated) | reported
+#   source       a key in sources.yaml, or a URL
+#   verified_at  the last time a person checked the figure against its source.
+#                Without it the figure is a draft: nothing reads it, `tape stack`
+#                lists it. Figures unchecked for stack.stale_days are flagged stale.
+#   revision_reason  required, and new, whenever a verified figure changes:
+#                every revision is logged with its reason, publicly.
+#
+# estimates: computed by the daily model run, never typed in.
+#   method       sum | product | ratio | difference | min | judgment (tape/model/core.py METHODS)
+#   inputs       the keys it is computed from, in order
+#   period       optional: one period; default, one estimate per period of the first input
+#   judgment     a stated range with no inputs: needs range, period, basis, source,
+#                and verified_at (a person stands behind it, as with a figure)
+#
+# Loaders add figures without passing through this file: EDGAR (filed: revenue,
+# capex, cash, debt, leases, backlog, share counts), Taiwan monthly revenue
+# (filed), Korea trade statistics, and SF Compute traded rents (reported).
+
+quantities:
+  # Drafted 2026-11-05 from CoreWeave's Q2 2026 release: "Expanded active power
+  # by nearly 500 MWs to reach 1.5 GW" and "Grew total contracted power to
+  # approximately 3.7 GW".
+  - key: coreweave.active_power
+    unit: mw
+    period: 2026-06-30
+    value: 1500
+    kind: company
+    source: coreweave_q2_2026
+    verified_at: null
+  - key: coreweave.contracted_power
+    unit: mw
+    period: 2026-06-30
+    value: 3700
+    range: [3650, 3750]
+    kind: company
+    source: coreweave_q2_2026
+    note: "approximately 3.7 GW"
+    verified_at: null
+
+estimates:
+  # Net debt from the filed balance sheet (EDGAR loader: LongTermDebt, cash and
+  # equivalents). Leases are left out; a lease-adjusted version is a separate key.
+  - key: coreweave.net_debt
+    unit: usd
+    method: difference
+    inputs: [coreweave.debt, coreweave.cash]
+
+  # GPUs deployed, from active power and all-in facility power per GPU.
+  - key: coreweave.mw_per_gpu
+    unit: mw_per_gpu
+    method: judgment
+    period: 2026-06-30
+    range: [0.0015, 0.002, 0.0025]
+    basis: >-
+      All-in facility power per GPU: a DGX H100 draws up to 10.2 kW for 8 GPUs (1.3 kW each); Blackwell racks
+      draw more per GPU; cooling and power conversion add to both. Starting range, for review.
+    source: nvidia_dgx_h100
+    verified_at: null
+  - key: coreweave.gpus_deployed
+    unit: gpus
+    method: ratio
+    inputs: [coreweave.active_power, coreweave.mw_per_gpu]

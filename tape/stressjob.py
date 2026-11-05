@@ -1,8 +1,10 @@
-"""The weekly stress test and its validation, against Postgres. The model is
+"""The stress test ("fragility of the market's view", a monthly exhibit since
+the Stack Engine revision) and its validation, against Postgres. The model is
 tape/stress.py; this module loads its inputs, stores its outputs, renders the
 cards and tells the operator.
 
-  weekly   Sunday, after the 15:00 ET sweep and before Asia opens: replay
+  run      the first Sunday of the month (stress.cadence), after the 15:00 ET
+           sweep and before Asia opens: replay
            recent drawdowns, then run every scenario on that sweep's
            positions and that hour's books. The operator gets the card in
            Telegram either way.
@@ -270,10 +272,20 @@ def validation(conn, s: Settings) -> dict:
 # ---- the weekly run --------------------------------------------------------
 
 
+def is_stress_day(s: Settings, d: date) -> bool:
+    """The configured ET weekday; when monthly, only its first in the month."""
+    if d.weekday() != int(s.t("stress", "weekday_et")):
+        return False
+    return s.t("stress").get("cadence", "weekly") != "monthly" or d.day <= 7
+
+
 def stress_day(s: Settings, now: datetime | None = None) -> date:
-    """The latest stress date at or before now: the configured ET weekday."""
+    """The latest stress date at or before now."""
     d = (now or utcnow()).astimezone(ET).date()
-    return d - timedelta(days=(d.weekday() - int(s.t("stress", "weekday_et"))) % 7)
+    d -= timedelta(days=(d.weekday() - int(s.t("stress", "weekday_et"))) % 7)
+    while not is_stress_day(s, d):
+        d -= timedelta(days=7)
+    return d
 
 
 def run_week(s: Settings, day: date | None = None, send: bool = True) -> dict:
@@ -488,14 +500,16 @@ def release(s: Settings, day: date) -> str:
     return f"released {s.env.site_url}/stress/{day}"
 
 
-def weekly_job(s: Settings, force: bool = False) -> dict:
-    """The Vercel cron entry: runs on the stress weekday from an hour after
-    the sweep hour onward, once per date."""
+def scheduled_job(s: Settings, force: bool = False) -> dict:
+    """The Vercel cron entry (weekly schedule): runs on a stress date, an hour
+    after the sweep hour, once per date. Monthly cadence skips all but the
+    first stress weekday of the month."""
     now_et = utcnow().astimezone(ET)
     want_h = int(s.t("stress", "sweep_hour_et")) + 1
-    if not force and (now_et.weekday() != int(s.t("stress", "weekday_et")) or now_et.hour != want_h):
+    if not force and (not is_stress_day(s, now_et.date()) or now_et.hour != want_h):
         return {
-            "skipped": f"it is {now_et:%a %H:%M} ET; the stress test runs {want_h}:xx ET on weekday {s.t('stress', 'weekday_et')}"
+            "skipped": f"it is {now_et:%a %d %b %H:%M} ET; the stress test runs {want_h}:xx ET on the "
+            f"{s.t('stress').get('cadence', 'weekly')} stress weekday ({s.t('stress', 'weekday_et')})"
         }
     day = now_et.date()
     with connect(s.env.database_url) as conn:

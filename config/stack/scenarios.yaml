@@ -1,0 +1,29 @@
+# Scenarios: change one input and push it through the quantity graph along
+# these links (tape/model/scenarios.py). Every link states its basis; the
+# exhibit prints it at each step.
+#
+# links
+#   kind elasticity  %change(to) = elasticity x %change(from); elasticity [lo, mid, hi]
+#   kind cap         to <= from / per (per: a quantity key, e.g. GB of HBM per unit)
+#
+# Only identities and arithmetic constraints are entered so far. Behavioural
+# links (how far rents move when capacity moves, how far a supplier's revenue
+# moves with units) need a sourced elasticity before they go in.
+
+links:
+  - from: hbm.bits_supply
+    to: nvidia.units_capacity
+    kind: cap
+    per: h100.hbm_per_unit
+    basis: "every accelerator needs its HBM: units cannot exceed HBM supply / HBM per unit"
+  - from: nvidia.units_capacity
+    to: nvidia.accelerator_revenue
+    kind: elasticity
+    elasticity: [1, 1, 1]
+    basis: "identity: revenue = units x average selling price, at an unchanged price"
+
+scenarios:
+  - id: hbm-shortfall-10
+    label: "HBM supply 10% short"
+    shock: {key: hbm.bits_supply, change: -0.10}
+    note: "Runs once hbm.bits_supply, h100.hbm_per_unit, nvidia.units_capacity and nvidia.accelerator_revenue have figures."

@@ -1,5 +1,5 @@
 [Unit]
-Description=Positioning Tape weekly stress test to Telegram
+Description=Positioning Tape monthly stress test (fragility of the market's view) to Telegram
 
 [Service]
 Type=oneshot

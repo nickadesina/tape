@@ -30,6 +30,18 @@
     {
       "path": "/api/stress",
       "schedule": "30 21 * * 0"
+    },
+    {
+      "path": "/api/model",
+      "schedule": "30 1 * * *"
+    },
+    {
+      "path": "/api/load",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/rents",
+      "schedule": "5 * * * *"
     }
   ]
 }

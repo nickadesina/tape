@@ -40,7 +40,7 @@ export default async function StressPage(props: PageProps<"/stress/[date]">) {
     <>
       <h1>Stress test, {date}</h1>
       <p className="dim">
-        Positions from the {et(run.hour)} snapshot ({run.accounts ?? "?"} accounts, {run.positions ?? "?"} positions),
+        Fragility of the market&apos;s view, the monthly stress test. Positions from the {et(run.hour)} snapshot ({run.accounts ?? "?"} accounts, {run.positions ?? "?"} positions),
         order books from {run.book_hour ? et(run.book_hour) : "n/a"}. Complex coverage {pct(run.coverage, 1, false)}.
         Hyperliquid only: one venue, the transparent corner of the trade, not the whole market.
       </p>

@@ -1,0 +1,22 @@
+# The forecast ledger: every forecast published, scored automatically when
+# the actual figure is reported (a filed, company-stated or reported figure
+# for the same key and period). Entries are never edited after publication;
+# a changed view is a new forecast with its own id.
+#
+#   id         stable slug
+#   key        <entity>.<metric> of the quantity forecast
+#   unit, period, value, range [lo, hi]
+#   published  the date it was published
+#   url        where it was published
+#
+# Example (not a forecast):
+#   - id: micron-revenue-fq1-27
+#     key: micron.revenue
+#     unit: usd
+#     period: [2026-09-01, 2026-11-30]
+#     value: 1.0e10
+#     range: [9.0e9, 1.1e10]
+#     published: 2026-11-10
+#     url: https://example.com/research/micron
+
+forecasts: []

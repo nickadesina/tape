@@ -22,6 +22,7 @@ type Defs = {
   };
   loop?: Record<string, number | string>;
   graph?: { edges?: number; drafts?: number; stale_days?: number };
+  stack?: { gap_persist_days?: number; stale_days?: number };
 };
 
 const usd = (x?: number) => (x == null ? "?" : `$${x.toLocaleString("en-US")}`);
@@ -152,10 +153,12 @@ export default async function Method() {
         level can overlap the last fine one by up to one price bucket.
       </p>
 
-      <h2 id="stress">Stress test</h2>
+      <h2 id="stress">Stress test: fragility of the market&apos;s view</h2>
       <p>
-        Every Sunday the test takes the 15:00 ET snapshot (every position, its leverage and liquidation price, each
-        account&apos;s margin) and that hour&apos;s books, and shocks each{" "}
+        The stress test is an exhibit, the fragility of the market&apos;s view: how much forced selling the positions
+        behind the prices would set off if one name fell. Once a month, on a Sunday, it takes the 15:00 ET snapshot
+        (every position, its leverage and liquidation price, each account&apos;s margin) and that hour&apos;s books, and
+        shocks each{" "}
         {(st.node_kinds ?? ["lab", "neocloud", "memory"]).join(", ")} name by{" "}
         {(st.shocks ?? [-0.1, -0.2, -0.3]).map((x) => p(x)).join(", ")}. A name with markets on two venues (Anthropic on
         xyz and io) moves on both. A graph shock also moves every name whose revenue runs through the shocked lab, by
@@ -230,6 +233,39 @@ export default async function Method() {
         A predictive claim (&ldquo;when X, Y follows&rdquo;) is published only after it passes a backtest and is logged
         with its horizon.
       </p>
+
+      <h2 id="stack">Stack model and gaps</h2>
+      <p>
+        The <Link href="/stack">stack model</Link> says what is physically possible: a bottom-up account of the AI
+        supply chain, from demand through accelerators, memory, packaging, power and cloud capacity to the economics of
+        a rented GPU and the financing behind it. The market says what is priced. The engine measures the distance
+        between the two, every day, on the <Link href="/gaps">gaps</Link> page.
+      </p>
+      <ul>
+        <li>
+          Every figure is filed, company-stated, reported, or an estimate. Filed and stated figures link their source
+          and were checked by a person; figures not re-checked in {d.stack?.stale_days ?? "a set number of"} days are
+          marked stale. A revision never overwrites: the old version stays and the change is logged with its reason.
+        </li>
+        <li>
+          Estimates are ranges, never points, and each states its method and the figures it was computed from.
+        </li>
+        <li>
+          Each comparison converts market prices into the model&apos;s unit (or the reverse) and prints its formula,
+          its inputs with their sources, its assumptions with their ranges, and how far the result moves when each
+          assumption is at either end. Market prices come from Hyperliquid, one venue.
+        </li>
+        <li>
+          A gap is flagged when the model&apos;s range and the market&apos;s range have not overlapped for{" "}
+          {d.stack?.gap_persist_days ?? "a set number of"} days in a row. A flag says the two disagree, not which is
+          right.
+        </li>
+        <li>
+          <Link href="/scenarios">Scenarios</Link> change one input and push it through the model to the revenue at
+          risk at each company. Forecasts are published with a range and scored in the{" "}
+          <Link href="/ledger">ledger</Link> when the actual figure is reported, misses included.
+        </li>
+      </ul>
 
       <h2>What the tape cannot see</h2>
       <p>

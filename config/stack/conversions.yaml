@@ -1,0 +1,32 @@
+# Comparisons: each turns a market price into physical or economic terms with
+# a documented formula (tape/model/conversions.py) and sets it against the
+# stack model. The daily model run writes one gaps row per comparison per day.
+#
+#   node         the comparison's id (gaps.node)
+#   entity       the entity it is about
+#   conversion   neocloud_rent | lab_revenue | accelerator_units
+#   market       role -> Hyperliquid market; the run reads that day's UTC close
+#   inputs       role -> quantity key, read as of the day
+#   assumptions  role -> {range: [lo, mid, hi], note}; printed on the exhibit,
+#                with how far the implied value moves across each range
+#   reviewed_at  the last time a person reviewed the assumptions. Without it
+#                the comparison is a draft: `tape model --drafts` computes it
+#                without storing anything, and nothing is published.
+#
+# Assumption values below are starting values for review, as in tape.yaml.
+
+comparisons:
+  - node: coreweave.rent_util
+    entity: coreweave
+    label: "CoreWeave: rent x utilization its valuation implies, against traded H100 rents"
+    conversion: neocloud_rent
+    market: {price: xyz:CRWV}
+    inputs:
+      shares: coreweave.shares_diluted
+      net_debt: coreweave.net_debt
+      gpus: coreweave.gpus_deployed
+      rent: h100.rent_traded
+    assumptions:
+      ev_revenue: {range: [6, 9, 12], note: "EV / next-twelve-month revenue a neocloud trades at; starting range"}
+      utilization: {range: [0.7, 0.85, 0.95], note: "share of deployed GPU-hours sold; starting range"}
+    reviewed_at: null

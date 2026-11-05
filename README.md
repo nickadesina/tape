@@ -13,12 +13,14 @@ Hyperliquid info API ──┘   (asyncio)  (Neon)   └─► Telegram: 16:00 E
 The design doc (Oct 30, 2026) is the spec. `docs/BUILD_NOTES.md` records what the build found on chain and where it
 differs from the doc.
 
-**AI Leverage Map** (design doc, Nov 5, 2026) is built on top of the tape. It joins a sourced map of how the money
-loops between labs, neoclouds, chip and memory makers (`config/graph.yaml`) with Hyperliquid's account-level record of
-who holds that chain and with what leverage. The flagship is a weekly stress test on real positions: shock one name,
-find the accounts that breach their margin, walk their forced selling through the real order books round after round.
-Three standing series sit beside it: whether labs and their suppliers trade as one asset, where the market prices an
-exposure differently from the map, and how deals are received. See "Leverage map" in `docs/BUILD_NOTES.md`.
+**Stack Engine** (working title; design doc Nov 5, 2026, revised) is built on top of the tape. It keeps a sourced,
+bottom-up model of the AI supply chain (`config/stack/`, plus loaders for SEC EDGAR, Taiwan monthly revenue, Korea
+trade statistics and SF Compute's GPU order book), reconciles it with what markets price (Hyperliquid closes turned
+into physical terms by documented conversions), and measures the gap. The model says what is physically possible,
+the market says what is priced, and the engine measures the distance. Scenarios push one changed input through the
+quantity graph; a forecast ledger scores every published forecast. The financing graph (`config/graph.yaml`) is one
+part of the model, and the stress test is now a monthly exhibit, "fragility of the market's view". See "Stack Engine"
+in `docs/BUILD_NOTES.md`.
 
 ## Layout
 
@@ -39,8 +41,12 @@ exposure differently from the map, and how deals are received. See "Leverage map
 | `tape/stress.py` | The stress model: shock, margin, liquidation, book walk, rounds. Pure. |
 | `tape/stressjob.py` | The weekly run, replay validation, the publication gates and release, the cards. |
 | `tape/graph.py`, `tape/loop.py`, `tape/standing.py` | The graph, the three standing series (pure), and running them in the hourly metrics job. |
+| `config/stack/` | The stack model's hand-checked part: entities, sources, figures and estimates, comparisons (conversions and their assumptions), scenario links, forecasts. Drafts load only once a person sets `verified_at` / `reviewed_at`. |
+| `tape/model/` | The stack model and reconciliation engine, pure: ranges and estimates (`core`), conversions, gaps, scenarios, the forecast ledger, the leading-indicator bench. |
+| `tape/modeljob.py` | The daily model run against Postgres: versions figures, computes estimates, gaps, scenarios, scores forecasts. |
+| `tape/loaders/` | EDGAR, Taiwan, Korea and SF Compute: figures straight from their source. |
 | `tape/migrations/` | Schema. |
-| `site/` | The public site: home, `/m/<market>`, `/legs`, `/events`, `/stress`, `/stress/<date>`, `/map`, `/method`, `/data`, permalinks `/p/...`, PNGs `/c/...`, CSV and JSON. |
+| `site/` | The public site: home, `/m/<market>`, `/legs`, `/events`, `/stress`, `/stress/<date>`, `/map`, `/stack`, `/node/<id>`, `/gaps`, `/scenarios/<id>`, `/ledger`, `/research/<slug>` (pieces in `site/content/research/`), `/method`, `/data`, permalinks `/p/...`, PNGs `/c/...`, CSV and JSON. |
 | `deploy/` | systemd units and timers for the box, env example, install script. |
 
 ## Run it locally
@@ -56,7 +62,10 @@ tape status                            # sweeps, queues, coverage per market
 tape daily --dry-run                   # render the daily chart without sending it
 tape candles --days 400                # daily closes for the standing series (once; metrics keeps them up)
 tape graph --drafts                    # check config/graph.yaml; list the edges awaiting verification
-tape stress --dry-run                  # the weekly stress test on the latest Sunday's sweep, without sending
+tape stress --dry-run                  # the stress test on the latest stress Sunday's sweep, without sending
+SEC_USER_AGENT="<name> <email>" tape load   # EDGAR, Taiwan and Korea figures into the stack model
+tape stack --drafts                    # check config/stack; list the figures awaiting verification
+tape model --drafts                    # the model run with drafts treated as verified; stores nothing
 
 cd site && npm install && DATABASE_URL=$DATABASE_URL npm run dev   # http://localhost:3000
 ```
@@ -79,11 +88,14 @@ these, plus a typecheck and build of the site.
 | `tape seed-leaderboard [--min-account-value N]` | Queue leaderboard addresses for a one-time low-priority snapshot. |
 | `tape universe [--all] [--json]` | Resolve the configured complex against live meta. |
 | `tape status` | Health at a glance, including depth collection and account margin. |
-| `tape stress [--day YYYY-MM-DD] [--dry-run]` | The weekly stress test: replay recent drawdowns, run every scenario, store, render, send the card. |
+| `tape stress [--day YYYY-MM-DD] [--dry-run]` | The stress test (monthly exhibit): replay recent drawdowns, run every scenario, store, render, send the card. |
 | `tape stress-replay [--days N]` | Replay recorded drawdowns against recorded liquidations; prints whether the model is validated. |
 | `tape stress-release <date>` | Publish a stress run on the site after the wording review. Refuses while coverage or validation fails. |
 | `tape graph [--drafts]` | Validate `config/graph.yaml`: nodes, verified, stale and draft edges, exposures. |
-| `tape candles [--days N]` | Backfill daily closes from `candleSnapshot` for the standing series. |
+| `tape candles [--days N]` | Backfill daily closes from `candleSnapshot` for the standing series and the model's conversions. |
+| `tape stack [--drafts]` | Validate `config/stack/`: what loads, which figures, judgments and comparisons are drafts. |
+| `tape model [--day D] [--drafts] [--dry-run]` | The daily model run: estimates, gaps, scenarios, forecast scores. `--drafts` treats drafts as verified and stores nothing. |
+| `tape load [edgar] [taiwan] [korea] [rents]` | Run loaders (default: the first three). Each skips itself while its key is unset. |
 
 ## Deploy
 
@@ -104,8 +116,13 @@ Vercel functions stop after 800 s, so the worker cuts the always-on indexer into
   budget; a shift running alongside drops to the rest.
 - **`/api/daily`, 16:00 ET:** two UTC schedules (20:00 and 21:00) for daylight time; only the one that lands on 16:00
   ET runs.
-- **`/api/stress`, Sunday 16:30 ET:** the weekly stress test, after the 15:00 ET sweep and before Asia opens. Two UTC
-  schedules again; only the one that lands on 16:xx ET runs.
+- **`/api/stress`, Sunday 16:30 ET:** the stress test, after the 15:00 ET sweep and before Asia opens. Two UTC
+  schedules again; only the one that lands on 16:xx ET runs, and with `stress.cadence: monthly` only on the month's
+  first Sunday.
+- **`/api/model`, 01:30 UTC:** the stack model run, after the 00:00 UTC closes.
+- **`/api/load`, 06:00 UTC:** EDGAR, Taiwan and Korea loaders. Each writes only what is new, so release days need no
+  calendar.
+- **`/api/rents`, hourly at :05:** the SF Compute order book.
 - **Depth:** each shift also holds three `l2Book` WebSockets (full precision, 3 and 2 significant figures) and writes
   banded depth every minute and a full book every hour. Overlapping shifts write each minute once.
 - **`POST /api/task`** with `{"args": ["status"]}` runs any CLI command except `index`: `seed-leaderboard`, `metrics
@@ -113,7 +130,8 @@ Vercel functions stop after 800 s, so the worker cuts the always-on indexer into
 
 Every path but `/api/health` needs `Authorization: Bearer $CRON_SECRET`; Vercel Cron sends it. Worker environment:
 `CRON_SECRET`, the Neon variables (the worker uses `DATABASE_URL_UNPOOLED`, since advisory locks and COPY need a
-direct session), `SITE_URL`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+direct session), `SITE_URL`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; for the Stack Engine loaders,
+`SEC_USER_AGENT` (SEC requires a declared name and contact), `SFCOMPUTE_TOKEN` and `KOREA_DATA_KEY`.
 
 ```bash
 curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -d '{"args":["status"]}' https://tape-worker-<team>.vercel.app/api/task
@@ -126,7 +144,8 @@ copies `deploy/tape.env.example` to `/etc/tape/tape.env` (fill it in and re-run)
 - `tape-metrics.timer`: `:02` every hour, as a catch-up. An advisory lock keeps it from running alongside the
   post-sweep run.
 - `tape-daily.timer`: 16:00 America/New_York, every day.
-- `tape-stress.timer`: Sunday 16:30 America/New_York.
+- `tape-stress.timer`: the first Sunday of the month, 16:30 America/New_York.
+- `tape-model.timer` (01:30 UTC), `tape-load.timer` (06:00 UTC), `tape-rents.timer` (hourly at :05).
 
 **Database:** `tape-db`, a Neon database created from Vercel Storage and attached to both projects, so Vercel sets
 its connection variables and bills it. It is separate from OpenMarket's databases. The worker (or box) uses the direct
@@ -157,13 +176,16 @@ cents a month.
 3. **Alerts:** each one carries the market, size, address, explorer link, its chart and the count of event posts made
    today (cap 2). After posting, run `tape event-posted <id> <url>`.
 4. **Quote-rides:** twitter-checker runs `tape match "<text>"` and attaches `charts[0].png` and `.permalink`.
-5. **Sunday ~16:30 ET:** the stress card arrives with the top three scenarios in the template ("A 20% drop in X forces
+5. **First Sunday of the month, ~16:30 ET:** the stress card arrives with the top three scenarios in the template ("A 20% drop in X forces
    $W of selling across N markets on Hyperliquid; amplification A×") and the gates. If both gates pass, review the
    wording, run `tape stress-release <date>`, and post before Asia opens. Until then the site does not show the run.
 6. **Standing-series alerts** (one-asset regime, graph against market, deal studies) arrive like event alerts, each
    with its chart. Every post carries coverage and the one-venue caveat; nothing names a wallet or a person.
 7. **Graph upkeep:** draft edges get checked against their source and given `verified_at`; corrections go under
    `corrections` in `config/graph.yaml`. `tape graph` flags stale edges.
+8. **Stack upkeep:** `tape stack --drafts` lists figures, judgments and comparisons awaiting a person. Check each
+   against its source and set `verified_at` (comparisons: review the assumptions, set `reviewed_at`). A changed figure
+   needs a new `revision_reason`; the revision log on `/stack` is public. New persistent gaps arrive in Telegram.
 
 ## Costs
 

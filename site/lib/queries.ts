@@ -294,3 +294,329 @@ export async function latestReleasedStressHour(): Promise<Date | null> {
   const r = await sql`select max(hour) as h from stress_runs where released_at is not null`;
   return (r[0]?.h as Date | null) ?? null;
 }
+
+// ---- Stack Engine: the stack model, gaps, scenarios, the forecast ledger ----
+
+export const SEGMENTS: { key: string; label: string }[] = [
+  { key: "demand", label: "Demand" },
+  { key: "accelerators", label: "Accelerators" },
+  { key: "memory", label: "Memory" },
+  { key: "packaging", label: "Packaging and foundry" },
+  { key: "power", label: "Power and data centres" },
+  { key: "cloud", label: "Cloud capacity and price" },
+  { key: "economics", label: "Economics" },
+  { key: "financing", label: "Financing" },
+];
+
+export type Entity = {
+  id: string;
+  name: string;
+  kind: string;
+  segment: string;
+  node: string | null;
+  markets: string[];
+  ids: Record<string, string | number>;
+  note: string | null;
+};
+
+export type Quantity = {
+  id: string;
+  key: string;
+  entity: string;
+  metric: string;
+  unit: string;
+  period_start: string;
+  period_end: string;
+  value: number;
+  lo: number;
+  hi: number;
+  kind: string; // filed | company | reported | estimate
+  method: string | null;
+  inputs: { key: string; entity: string | null }[];
+  source: string | null;
+  source_url: string | null;
+  source_title: string | null;
+  source_publisher: string | null;
+  origin: string;
+  version: number;
+  valid_from: Date;
+  valid_to: Date | null;
+  revision_reason: string | null;
+  verified_at: string | null;
+  stale: boolean;
+};
+
+const ENTITY_ORDER = SEGMENTS.map((s) => s.key);
+
+export async function entities(): Promise<Entity[]> {
+  const r = await sql`
+    select id, name, kind, segment, node, markets, ids, note from entities
+    order by array_position(${ENTITY_ORDER}::text[], segment) nulls last, segment, name`;
+  return r as unknown as Entity[];
+}
+
+export async function entity(id: string): Promise<Entity | null> {
+  const r = await sql`select id, name, kind, segment, node, markets, ids, note from entities where id = ${id}`;
+  return (r[0] as unknown as Entity) ?? null;
+}
+
+// Each input key with the entity that carries it, so an estimate can link what it was computed from.
+const quantityColumns = () => sql`
+  q.id::text as id, q.key, q.entity, q.metric, q.unit,
+  to_char(q.period_start, 'YYYY-MM-DD') as period_start, to_char(q.period_end, 'YYYY-MM-DD') as period_end,
+  q.value, q.lo, q.hi, q.kind, q.method,
+  coalesce((select jsonb_agg(jsonb_build_object(
+              'key', k, 'entity', (select i.entity from quantities i where i.key = k limit 1)) order by n)
+            from unnest(q.inputs) with ordinality as u(k, n)), '[]'::jsonb) as inputs,
+  q.source, s.url as source_url, s.title as source_title, s.publisher as source_publisher,
+  q.origin, q.version, q.valid_from, q.valid_to, q.revision_reason,
+  to_char(q.verified_at, 'YYYY-MM-DD') as verified_at, q.stale`;
+
+/** Current quantities (valid_to is null), the latest period per key; all entities or one. */
+export async function currentQuantities(entityId?: string): Promise<Quantity[]> {
+  const r = await sql`
+    select * from (
+      select distinct on (q.key) ${quantityColumns()}
+      from quantities q left join sources s on s.id = q.source
+      where q.valid_to is null ${entityId ? sql`and q.entity = ${entityId}` : sql``}
+      order by q.key, q.period_end desc, q.period_start desc
+    ) x order by entity, key`;
+  return r as unknown as Quantity[];
+}
+
+/** Every version of every figure for one entity: by key, newest period and version first. */
+export async function quantityHistory(entityId: string): Promise<Quantity[]> {
+  const r = await sql`
+    select ${quantityColumns()}
+    from quantities q left join sources s on s.id = q.source
+    where q.entity = ${entityId}
+    order by q.key, q.period_end desc, q.period_start desc, q.version desc`;
+  return r as unknown as Quantity[];
+}
+
+export type Revision = {
+  key: string;
+  entity: string;
+  unit: string;
+  period_start: string;
+  period_end: string;
+  version: number;
+  old_value: number | null;
+  old_lo: number | null;
+  old_hi: number | null;
+  value: number;
+  lo: number;
+  hi: number;
+  revision_reason: string | null;
+  valid_from: Date;
+};
+
+/** The public revision log: every version after the first, against the one it replaced. */
+export async function quantityRevisions(limit = 1000): Promise<Revision[]> {
+  const r = await sql`
+    select q.key, q.entity, q.unit, to_char(q.period_start, 'YYYY-MM-DD') as period_start,
+           to_char(q.period_end, 'YYYY-MM-DD') as period_end, q.version,
+           p.value as old_value, p.lo as old_lo, p.hi as old_hi, q.value, q.lo, q.hi,
+           q.revision_reason, q.valid_from
+    from quantities q
+    left join quantities p on p.key = q.key and p.period_start = q.period_start
+      and p.period_end = q.period_end and p.version = q.version - 1
+    where q.version > 1
+    order by q.valid_from desc, q.key limit ${limit}`;
+  return r as unknown as Revision[];
+}
+
+export type GapInput = {
+  name: string;
+  key?: string;
+  value: number;
+  lo: number;
+  hi: number;
+  unit: string;
+  kind?: string;
+  source?: string;
+};
+export type GapAssumption = { name: string; value: number; lo: number; hi: number; unit: string; note?: string };
+export type GapDetail = {
+  formula?: string;
+  inputs?: GapInput[];
+  assumptions?: GapAssumption[];
+  sensitivity?: { name: string; low: number; high: number }[];
+  model_from?: string[];
+  caveat?: string;
+};
+
+export type Gap = {
+  day: string;
+  node: string;
+  entity: string;
+  label: string;
+  metric: string;
+  unit: string;
+  model_value: number;
+  model_lo: number;
+  model_hi: number;
+  market_value: number;
+  market_lo: number;
+  market_hi: number;
+  distance: number;
+  overlap: boolean;
+  days_apart: number;
+  flagged: boolean;
+  conversion: string;
+  detail: GapDetail;
+};
+
+export type GapPoint = Omit<Gap, "detail" | "conversion" | "metric">;
+
+const gapColumns = () => sql`
+  to_char(day, 'YYYY-MM-DD') as day, node, entity, label, unit, model_value, model_lo, model_hi,
+  market_value, market_lo, market_hi, distance, overlap, days_apart, flagged`;
+
+/** The latest day's gaps, one per node: flagged first, then by distance. */
+export async function latestGaps(): Promise<Gap[]> {
+  const r = await sql`
+    select ${gapColumns()}, metric, conversion, detail from gaps
+    where day = (select max(day) from gaps)
+    order by flagged desc, abs(distance) desc, node`;
+  return r as unknown as Gap[];
+}
+
+/** Each node's daily gaps over the last `days` days up to the latest day, oldest first. */
+export async function gapHistory(days = 90, entityId?: string): Promise<GapPoint[]> {
+  const r = await sql`
+    select ${gapColumns()} from gaps
+    where day > (select max(day) from gaps) - ${days}::int
+      ${entityId ? sql`and entity = ${entityId}` : sql``}
+    order by node, day`;
+  return r as unknown as GapPoint[];
+}
+
+/** The latest gap row for each node of an entity (with its detail). */
+export async function entityLatestGaps(entityId: string): Promise<Gap[]> {
+  const r = await sql`
+    select distinct on (node) ${gapColumns()}, metric, conversion, detail from gaps
+    where entity = ${entityId} order by node, day desc`;
+  return r as unknown as Gap[];
+}
+
+export type ModelRun = {
+  id: string;
+  day: string;
+  started_at: Date;
+  finished_at: Date | null;
+  ok: boolean | null;
+  quantities: number | null;
+  estimates: number | null;
+  gaps: number | null;
+  flags: number | null;
+  note: string | null;
+};
+
+export async function latestModelRun(): Promise<ModelRun | null> {
+  const r = await sql`
+    select id::text as id, to_char(day, 'YYYY-MM-DD') as day, started_at, finished_at, ok, quantities, estimates,
+           gaps, flags, note
+    from model_runs order by day desc, started_at desc limit 1`;
+  return (r[0] as unknown as ModelRun) ?? null;
+}
+
+export type EntityEdge = GraphEdge & { src_name: string; dst_name: string };
+
+/** Financing-graph edges into or out of one graph node. */
+export async function nodeEdges(node: string): Promise<EntityEdge[]> {
+  const r = await sql`
+    select e.id, e.src, e.dst, a.name as src_name, b.name as dst_name, e.type, e.size_usd, e.status, e.tenor,
+           e.share, to_char(e.date, 'YYYY-MM-DD') as date, e.source, e.confidence, e.note,
+           to_char(e.verified_at, 'YYYY-MM-DD') as verified_at, e.stale
+    from edges e join nodes a on a.key = e.src join nodes b on b.key = e.dst
+    where e.src = ${node} or e.dst = ${node}
+    order by e.date desc, e.id`;
+  return r as unknown as EntityEdge[];
+}
+
+export type ScenarioSummary = { id: string; label: string; day: string; days: number };
+
+export async function scenarioList(): Promise<ScenarioSummary[]> {
+  const r = await sql`
+    select distinct on (id) id, label, to_char(day, 'YYYY-MM-DD') as day,
+           (count(*) over (partition by id))::int as days
+    from scenarios order by id, day desc`;
+  return r as unknown as ScenarioSummary[];
+}
+
+export type Triple = [number, number, number];
+export type Scenario = {
+  id: string;
+  day: string;
+  label: string;
+  shock: { key: string; change: number | string; note?: string };
+  path: { key: string; label: string; unit: string; base: Triple; shocked: Triple; via?: string }[];
+  revenue_at_risk: { entity: string; name: string; lo: number; mid: number; hi: number; via?: string }[];
+};
+
+/** One scenario on a day, or on its latest day; with every day it was run. */
+export async function scenario(id: string, day?: string): Promise<{ scenario: Scenario; days: string[] } | null> {
+  if (day && !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const r = await sql`
+    select id, to_char(day, 'YYYY-MM-DD') as day, label, shock, path, revenue_at_risk from scenarios
+    where id = ${id} ${day ? sql`and day = ${day}::date` : sql``}
+    order by day desc limit 1`;
+  if (!r[0]) return null;
+  const d = await sql`select to_char(day, 'YYYY-MM-DD') as day from scenarios where id = ${id} order by day desc`;
+  return { scenario: r[0] as unknown as Scenario, days: d.map((x) => x.day as string) };
+}
+
+export type Forecast = {
+  id: string;
+  key: string;
+  entity: string;
+  metric: string;
+  unit: string;
+  period_start: string;
+  period_end: string;
+  value: number;
+  lo: number;
+  hi: number;
+  published: string;
+  url: string | null;
+  note: string | null;
+  actual: number | null;
+  actual_source: string | null;
+  actual_url: string | null;
+  actual_kind: string | null;
+  error: number | null;
+  within: boolean | null;
+  scored_at: Date | null;
+};
+
+export async function forecasts(): Promise<Forecast[]> {
+  const r = await sql`
+    select f.id, f.key, f.entity, f.metric, f.unit, to_char(f.period_start, 'YYYY-MM-DD') as period_start,
+           to_char(f.period_end, 'YYYY-MM-DD') as period_end, f.value, f.lo, f.hi,
+           to_char(f.published, 'YYYY-MM-DD') as published, f.url, f.note, f.actual, f.actual_source,
+           s.url as actual_url, f.actual_kind, f.error, f.within, f.scored_at
+    from forecasts f left join sources s on s.id = f.actual_source
+    order by f.published desc, f.id`;
+  return r as unknown as Forecast[];
+}
+
+export type Calibration = {
+  forecasts: number;
+  scored: number;
+  within_share: number | null;
+  median_abs_error: number | null;
+};
+
+/** Calibration over scored forecasts: how many, the share whose actual landed in range, the median |error|. */
+export async function calibration(): Promise<Calibration> {
+  const r = await sql`
+    select count(*)::int as forecasts,
+           (count(*) filter (where actual is not null))::int as scored,
+           avg(case when within then 1.0 else 0.0 end) filter (where actual is not null and within is not null)
+             ::double precision as within_share,
+           (percentile_cont(0.5) within group (order by abs(error)) filter (where actual is not null and error is not null))
+             ::double precision as median_abs_error
+    from forecasts`;
+  return r[0] as unknown as Calibration;
+}

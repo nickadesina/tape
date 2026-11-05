@@ -1,0 +1,9 @@
+[Unit]
+Description=Stack Engine daily model run: estimates, gaps, scenarios, forecast scores
+
+[Service]
+Type=oneshot
+User=tape
+WorkingDirectory=/opt/tape
+EnvironmentFile=/etc/tape/tape.env
+ExecStart=/opt/tape/.venv/bin/tape model

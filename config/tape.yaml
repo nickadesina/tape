@@ -84,6 +84,10 @@ graph:
   stale_days: 90                 # an edge not re-checked for this long is flagged stale
 
 stress:
+  # Monthly since the Stack Engine revision (Nov 5 2026): the stress test is
+  # the "fragility of the market's view" exhibit, not the weekly flagship.
+  # It runs on the first such weekday of each month.
+  cadence: monthly               # monthly | weekly
   weekday_et: 6                  # Sunday (Monday is 0)
   sweep_hour_et: 15              # positions from this sweep; the job runs after it, before Asia opens
   shocks: [-0.10, -0.20, -0.30]
@@ -122,3 +126,34 @@ loop:
   min_history_days: 60
   tension_days: 90
   deal_days: 5
+
+# ---- Stack Engine (design doc, Nov 5 2026, revised) -------------------------
+
+stack:
+  stale_days: 90                 # a config figure not re-checked for this long is flagged stale
+  gap_persist_days: 5            # a gap is flagged after this many consecutive days without overlap
+  edgar:
+    since: 2023-01-01            # periods ending before this are not loaded
+    pause_s: 0.2                 # between companies (SEC allows 10 requests a second)
+    # metric -> concepts tried in order (the first that reports a period wins it)
+    metrics:
+      revenue: {type: duration, unit: usd, concepts: [Revenues, RevenueFromContractWithCustomerExcludingAssessedTax, RevenueFromContractWithCustomerIncludingAssessedTax]}
+      capex: {type: duration, unit: usd, concepts: [PaymentsToAcquirePropertyPlantAndEquipment, PaymentsToAcquireProductiveAssets]}
+      cash: {type: instant, unit: usd, concepts: [CashAndCashEquivalentsAtCarryingValue]}
+      debt: {type: instant, unit: usd, concepts: [LongTermDebt, DebtInstrumentCarryingAmount]}
+      operating_leases: {type: instant, unit: usd, concepts: [OperatingLeaseLiability]}
+      finance_leases: {type: instant, unit: usd, concepts: [FinanceLeaseLiability]}
+      backlog: {type: instant, unit: usd, concepts: [RevenueRemainingPerformanceObligation]}
+      purchase_obligations: {type: instant, unit: usd, concepts: [UnrecordedUnconditionalPurchaseObligationBalanceSheetAmount, PurchaseObligation]}
+      # A weighted average is not additive, so no quarter is derived from year-to-date figures.
+      shares_diluted: {type: duration, unit: shares, xbrl_unit: shares, additive: false, concepts: [WeightedAverageNumberOfDilutedSharesOutstanding]}
+  korea:
+    hs: ["8542"]                 # integrated circuits; 854232 is memories
+  sfcompute:
+    source_url: https://docs.sfcompute.com/preview/orderbook.md
+    accelerators: [h100, h200, b200]
+    gpus_per_node: 8             # the book prices nodes of 8 GPUs
+    horizon_days: 90             # windows collected: delivery starting within this
+    rent_start_within_days: 14   # traded rent: windows starting within two weeks (the spot end)
+    min_window_hours: 24
+    rent_window_days: 7          # traded rent: median of the last week's quotes

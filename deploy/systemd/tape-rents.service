@@ -1,0 +1,9 @@
+[Unit]
+Description=Stack Engine SF Compute order book collector
+
+[Service]
+Type=oneshot
+User=tape
+WorkingDirectory=/opt/tape
+EnvironmentFile=/etc/tape/tape.env
+ExecStart=/opt/tape/.venv/bin/tape load rents

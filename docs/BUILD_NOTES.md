@@ -246,3 +246,109 @@ its five-day window; old edges are studied but do not page.
   scores each claim at its horizon. Nothing in this build makes a predictive claim, so there is nothing to log yet.
 - **GPU rental prices** on compute nodes: still an open question in the doc.
 - **Paid data:** none, per the doc's non-goals.
+
+## Stack Engine (design doc revision, Nov 5 2026)
+
+The doc was revised from a feed (the AI Leverage Map) into a research engine: a sourced, bottom-up model of the AI
+stack (layer 1), market-implied values for its nodes (layer 2), and a reconciliation engine (layer 3). This build
+does the doc's "Changes to the existing Tape" and the first phase of its plan (memory, accelerators, rents), in that
+order. Everything above this section still runs; the stress test is now a monthly exhibit.
+
+### Tables and the model's files
+
+Migration 005 adds the doc's eight tables (`entities`, `quantities`, `relationships`, `sources`, `model_runs`, `gaps`,
+`scenarios`, `forecasts`) and two for SF Compute (`rent_quotes`, `rent_fills`). Market-implied values have no table of
+their own: each `gaps` row carries both ranges and, in `detail`, the formula, every input with its source, the
+assumptions and the sensitivity, which is what the exhibit prints.
+
+`quantities` keeps every version of a figure. A revision closes the current row (`valid_to`) and adds the next
+version with its `revision_reason`. A config figure that changes without a new reason is refused, so the public
+revision log on `/stack` is complete by construction. Estimates and loader figures say why on their own
+("recomputed from …", "restated: 10-Q/A filed …"). `relationships` versions `config/graph.yaml`'s verified edges the
+same way; `edges` stays the current set the stress test reads.
+
+The hand-checked part of the model lives in `config/stack/`, versioned like the graph, with the graph's rule: a figure
+without `verified_at`, a judgment without `verified_at`, or a comparison without `reviewed_at` is a draft and nothing
+reads it. `tape model --drafts` computes everything with drafts treated as verified and stores nothing.
+
+### `tape/model/`
+
+Pure, like `compute.py`. Every number is a `Range` (low, middle, high) and the arithmetic is interval arithmetic, so
+ranges carry through estimates, conversions and scenarios without anyone choosing a point. Estimate methods are
+`sum`, `product`, `ratio`, `difference`, `min` (the binding constraint) and `judgment` (a stated range with a basis and
+a source, and no inputs). An estimate is computed per period of its first input, reading the others as of that
+period's end; one whose inputs are missing is reported as missing, never guessed.
+
+Conversions (each a documented formula with its assumptions printed on the exhibit):
+
+- `neocloud_rent`: (price × shares + net debt) / (EV/revenue) / (GPUs × 8,760 h) = the rent × utilization per
+  GPU-hour the valuation implies; the model side is traded rent × a utilization range.
+- `lab_revenue`: pre-IPO price × valuation per price unit / (EV/revenue) = implied annual revenue; the model side is
+  annual compute commitments / compute's share of revenue.
+- `accelerator_units`: EV / (EV/revenue) × accelerator share / ASP = implied units a year, against the modelled
+  packaging constraint.
+- Not built: memory-stock moves → implied price cycle. It needs contract memory prices, still an open question.
+
+A gap is flagged after `stack.gap_persist_days` (5) consecutive days without overlap; a missed day restarts the count.
+The operator gets a Telegram line when a gap is newly flagged. Scenario links are `cap` (units ≤ HBM supply / HBM per
+unit) or `elasticity` (a sourced range); revenue at risk is every revenue on the path, base less shocked. The
+indicator bench scores out-of-sample skill against "no change" with the reopen study's formula and promotes only a
+gain of at least 0.02 over the baseline: a hair above zero is noise.
+
+### Loaders
+
+- **EDGAR** (`tape load edgar`, daily): one companyfacts request per entity with a CIK, concepts per metric in
+  `stack.edgar.metrics`. A live run on 2026-11-05 loaded 1,467 figures for 17 of 18 companies, matching the filings
+  (CoreWeave Q2 2026: revenue $2,575M, backlog $103.7B, long-term debt $35.6B, capex $6,422M). Cash-flow statements report the year to date, so a quarter missing on
+  its own is derived as this year-to-date less the last (the row's note says so); weighted-average share counts are
+  never derived that way. A comparative repeated in later filings keeps the first filing as its source, so a re-run
+  writes nothing (checked: 0 rows on the second run). TSMC and Nebius file IFRS 20-Fs, which this concept list does
+  not read: TSMC's pulse comes from Taiwan instead, and Nebius has 10 figures. SEC requires a declared user agent, so
+  the loader refuses without `SEC_USER_AGENT`.
+- **Taiwan** (`tape load taiwan`, daily): TWSE's open data serves the latest month for every listed company, so the
+  series starts the day the loader first runs. Live on 2026-11-05: September 2026 for TSMC, UMC, ASE, Nanya and Winbond.
+  The host resets connections intermittently from the build environment; a failed day is retried by the next.
+- **Korea** (`tape load korea`): Korea Customs trade statistics by HS code from data.go.kr, with `KOREA_DATA_KEY`.
+  Not run: the portal refused every connection from the build environment, so the request and field names follow the
+  published spec and the parser fails loudly, naming the fields it got, if they differ. The ten-day releases are
+  press releases, not an API.
+- **SF Compute** (`tape load rents`, hourly): every delivery window over 90 days per accelerator (H100, H200, B200)
+  and the fills in windows starting within 14 days, per GPU-hour (node prices / 8). The endpoints are confirmed at
+  `api.sfcompute.com/preview/v2/orderbook/*` and answer "missing authentication token" without one, so the parser is
+  tested against the documented responses only. `h100.rent_traded` for a day is the median best bid, mid and ask of
+  the last week's quotes for windows of 24 h or more starting within two weeks: the spot end of the curve.
+- **Interconnection queues:** not built. They belong to the plan's second phase (power), and each ISO publishes in
+  its own format.
+
+### The first gap, and what it waits for
+
+The CoreWeave comparison (`coreweave.rent_util`) runs end to end in tests and, on real data with drafts, everything
+but the rent: on the 2026-11-04 close of xyz:CRWV ($48.48), 551M diluted shares and $30.0B net debt (filed), and
+600k–1M GPUs (1.5 GW active power from the Q2 release over a draft 1.5–2.5 kW per GPU), the price implies
+$0.54–1.80 of rent × utilization per GPU-hour (middle $0.96) at a starting 6–12× EV/revenue. It waits on:
+
+1. `SFCOMPUTE_TOKEN`, for traded rents (the open question in the doc).
+2. A person verifying the two drafted CoreWeave figures and the power-per-GPU judgment, and reviewing the
+   comparison's assumptions (`tape stack --drafts` lists all four).
+
+### The stress test goes monthly
+
+`stress.cadence: monthly` runs it on the first stress weekday of the month; the Vercel cron stays weekly and skips the
+other Sundays, and the box's timer is `Sun *-*-01..07`. `weekly_job` is now `scheduled_job`. Nothing else changed.
+
+### Site
+
+`/stack` (segments, current figures with ranges and kind, estimates labelled with their method and inputs, the
+revision log), `/node/<id>`, `/gaps` (latest gaps, a server-rendered range chart per node, formula, assumptions,
+sensitivity, the one-venue caveat), `/scenarios/<id>` (and `/<day>`), `/ledger` (forecasts and calibration) and
+`/research/<slug>` (Markdown pieces in `site/content/research/`, built statically). Each shows an empty state until
+the model run writes rows.
+
+### Not built yet
+
+- The memory price-cycle conversion and the interconnection-queue loader (above).
+- Behavioural scenario links (how far rents move with capacity): `config/stack/scenarios.yaml` holds only identities
+  and the HBM cap until a sourced elasticity exists.
+- Earnings-call transcripts (vendor open), licensed memory prices, and SemiAnalysis's models (build or license is
+  open).
+- A leading-indicator run on real series: the bench is built; the candidates need their histories first.

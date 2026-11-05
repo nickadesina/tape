@@ -1,0 +1,22 @@
+# Documents the stack model cites by key. A quantity can also cite a URL
+# directly; the model run registers it in the sources table either way, with
+# when it was retrieved.
+
+sources:
+  coreweave_q2_2026:
+    url: https://www.sec.gov/Archives/edgar/data/1769628/000176962826000362/coreweave2q26earningspress.htm
+    title: CoreWeave second quarter 2026 results (8-K exhibit)
+    publisher: CoreWeave
+    published: 2026-08-11
+  nvidia_dgx_h100:
+    url: https://www.nvidia.com/en-us/data-center/dgx-h100/
+    title: NVIDIA DGX H100 system specifications
+    publisher: NVIDIA
+  sfcompute_orderbook:
+    url: https://docs.sfcompute.com/preview/orderbook.md
+    title: SF Compute public order book
+    publisher: SF Compute
+  trade_xyz_preipo:
+    url: https://docs.trade.xyz/perpetuals/specifications-and-schedules/pre-ipo-specification-index.md
+    title: trade.xyz pre-IPO specification index
+    publisher: trade.xyz

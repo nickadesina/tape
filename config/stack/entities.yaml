@@ -1,0 +1,57 @@
+# The stack model's entities: companies, facilities, products or SKUs, and
+# themes (Stack Engine design doc, layer 1).
+#
+#   kind      company | facility | sku | theme
+#   segment   demand | accelerators | memory | packaging | power | cloud | economics | financing
+#   node      the config/graph.yaml node, for companies: the entity takes that
+#             node's Hyperliquid markets, so a market is listed once
+#   ids       identifiers loaders use: cik (SEC EDGAR), twse (Taiwan Stock
+#             Exchange code), ticker
+#
+# A quantity's key is <entity>.<metric>, so ids cannot contain a dot.
+# CIKs are from SEC's company_tickers.json (retrieved 2026-11-05).
+
+entities:
+  # Demand: labs and hyperscalers
+  anthropic: {name: Anthropic, kind: company, segment: demand, node: anthropic}
+  openai: {name: OpenAI, kind: company, segment: demand, node: openai}
+  microsoft: {name: Microsoft, kind: company, segment: demand, node: microsoft, ids: {cik: "789019", ticker: MSFT}}
+  google: {name: Alphabet (Google), kind: company, segment: demand, node: google, ids: {cik: "1652044", ticker: GOOGL}}
+  amazon: {name: Amazon, kind: company, segment: demand, node: amazon, ids: {cik: "1018724", ticker: AMZN}}
+  meta: {name: Meta, kind: company, segment: demand, node: meta, ids: {cik: "1326801", ticker: META}}
+  oracle: {name: Oracle, kind: company, segment: demand, node: oracle, ids: {cik: "1341439", ticker: ORCL}}
+
+  # Accelerators
+  nvidia: {name: Nvidia, kind: company, segment: accelerators, node: nvidia, ids: {cik: "1045810", ticker: NVDA}}
+  amd: {name: AMD, kind: company, segment: accelerators, node: amd, ids: {cik: "2488", ticker: AMD}}
+  broadcom: {name: Broadcom, kind: company, segment: accelerators, node: broadcom, ids: {cik: "1730168", ticker: AVGO}}
+  marvell: {name: Marvell, kind: company, segment: accelerators, node: marvell, ids: {cik: "1835632", ticker: MRVL}}
+  h100: {name: Nvidia H100, kind: sku, segment: accelerators}
+  h200: {name: Nvidia H200, kind: sku, segment: accelerators}
+  b200: {name: Nvidia B200, kind: sku, segment: accelerators}
+
+  # Memory
+  micron: {name: Micron, kind: company, segment: memory, node: micron, ids: {cik: "723125", ticker: MU}}
+  sk_hynix: {name: SK Hynix, kind: company, segment: memory, node: sk_hynix}
+  samsung: {name: Samsung Electronics, kind: company, segment: memory, node: samsung}
+  sandisk: {name: SanDisk, kind: company, segment: memory, node: sandisk, ids: {cik: "2023554", ticker: SNDK}}
+  western_digital: {name: Western Digital, kind: company, segment: memory, node: western_digital, ids: {cik: "106040", ticker: WDC}}
+  nanya: {name: Nanya Technology, kind: company, segment: memory, ids: {twse: "2408"}}
+  winbond: {name: Winbond Electronics, kind: company, segment: memory, ids: {twse: "2344"}}
+  hbm: {name: High-bandwidth memory, kind: theme, segment: memory}
+  korea_chips: {name: Korea semiconductor exports, kind: theme, segment: memory, note: "Korea Customs Service trade statistics, HS 8542 (integrated circuits)"}
+
+  # Packaging and foundry
+  tsmc: {name: TSMC, kind: company, segment: packaging, node: tsmc, ids: {cik: "1046179", twse: "2330", ticker: TSM}}
+  ase: {name: ASE Technology, kind: company, segment: packaging, ids: {twse: "3711"}}
+  umc: {name: UMC, kind: company, segment: packaging, ids: {twse: "2303"}}
+  cowos: {name: Advanced packaging (CoWoS-class), kind: theme, segment: packaging}
+
+  # Cloud capacity and price
+  coreweave: {name: CoreWeave, kind: company, segment: cloud, node: coreweave, ids: {cik: "1769628", ticker: CRWV}}
+  nebius: {name: Nebius, kind: company, segment: cloud, node: nebius, ids: {cik: "1513845", ticker: NBIS}, note: "Files 20-F and 6-K; EDGAR XBRL coverage is thinner than for 10-K filers"}
+  iren: {name: IREN, kind: company, segment: cloud, node: iren, ids: {cik: "1878848", ticker: IREN}}
+
+  # Optics (the interconnect leg)
+  lumentum: {name: Lumentum, kind: company, segment: accelerators, node: lumentum, ids: {cik: "1633978", ticker: LITE}}
+  aaoi: {name: Applied Optoelectronics, kind: company, segment: accelerators, node: aaoi, ids: {cik: "1158114", ticker: AAOI}}

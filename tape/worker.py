@@ -11,7 +11,12 @@ the same work is cut into pieces that each finish in time:
           hour is finished.
   daily   16:00 ET (two UTC schedules; only the one that lands on 16:00 ET runs).
   stress  Sunday 16:30 ET, after the 15:00 ET sweep and before Asia opens
-          (two UTC schedules; only the one that lands on 16:xx ET runs).
+          (two UTC schedules; only the one that lands on 16:xx ET runs, and
+          with the monthly cadence only on the month's first Sunday).
+  model   daily 01:30 UTC, after the 00:00 UTC closes: the stack model run.
+  load    daily 06:00 UTC: EDGAR, Taiwan and Korea loaders (each writes only
+          what is new, so release days need no calendar).
+  rents   hourly at :05: the SF Compute order book.
 """
 
 from __future__ import annotations
@@ -49,6 +54,9 @@ TASKS = {
     "stress-release",
     "graph",
     "candles",
+    "stack",
+    "model",
+    "load",
 }
 
 
@@ -124,6 +132,25 @@ def daily_job(s: Settings, force: bool = False) -> dict:
     if sent and not force:
         return {"skipped": f"daily for {day} already ran"}
     return daily.run(s, day, send=True)
+
+
+def load_job(s: Settings) -> dict:
+    from .loaders import edgar, korea, taiwan
+
+    out = {}
+    for name, mod in (("edgar", edgar), ("taiwan", taiwan), ("korea", korea)):
+        try:
+            out[name] = mod.load(s)
+        except Exception as e:  # one source down must not stop the others
+            log.exception("loader %s failed", name)
+            out[name] = {"error": f"{type(e).__name__}: {e}"}
+    return out
+
+
+def rents_job(s: Settings) -> dict:
+    from .loaders import sfcompute
+
+    return sfcompute.load(s)
 
 
 def task(args: list[str]) -> dict:
