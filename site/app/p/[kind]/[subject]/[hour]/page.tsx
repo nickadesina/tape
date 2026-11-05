@@ -51,9 +51,8 @@ export default async function Permalink(props: PageProps<"/p/[kind]/[subject]/[h
   return (
     <>
       <p className="status">
-        <span>pinned</span>
-        <span>{utc(r.hour)}</span>
-        <span>{et(r.hour)}</span>
+        <span className="tag">{utc(r.hour)}</span>
+        <span className="chip">pinned · {et(r.hour)}</span>
       </p>
       <h1>{title(r.kind, r.subject)}</h1>
       <p className="lede">This URL always shows this hour.</p>

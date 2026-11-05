@@ -1,11 +1,12 @@
 """Charts. One function per chart type; inputs are plain data, output is PNG bytes.
 
-The look matches the site: an ink ground, hairline gridlines, a heavy Mincho
-title (Noto Serif JP Black), figures in BIZ UDGothic, white for the headline
-series and a short palette for the rest. Orange is kept for callouts. No
-logo, no gradient, no glow. The site serves these same PNGs, so a screenshot
-of the site and a post are the same picture. The fonts ship in tape/fonts
-(SIL OFL), subset to Latin, so a render never depends on what the box has.
+The look matches the site (a quiet 2000s broadcast caption): a cool grey
+ground, hairline gridlines, a heavy gothic title (Zen Kaku Gothic New Black),
+figures in BIZ UDGothic, navy for the headline series and a short palette
+for the rest. Green and red are kept for long and short callouts. No logo,
+no gradient. The site serves these same PNGs, so a screenshot of the site
+and a post are the same picture. The fonts ship in tape/fonts (SIL OFL),
+subset to Latin, so a render never depends on what the box has.
 """
 
 from __future__ import annotations
@@ -28,23 +29,23 @@ from matplotlib.ticker import FuncFormatter, PercentFormatter  # noqa: E402
 from PIL import Image  # noqa: E402
 
 # The site's tokens (site/app/globals.css). Keep the two in step.
-INK = "#0B0A0F"
-TEXT = "#ECEBE4"
-DIM = "#9B97A8"
-GRID = "#26232E"
-AXIS = "#4A4656"
+INK = "#F3F4F7"  # the ground
+TEXT = "#121733"
+DIM = "#4C5270"
+GRID = "#D7DAE3"
+AXIS = "#9DA2B5"
 # Series colors, in legend order. None of them carries a meaning on the site:
-# green (long), orange (short, callouts) and violet (links) are kept out.
-PALETTE = ["#5CC8E0", "#F0B84A", "#FF7AA8", "#7F9CFF", "#C9B99A", "#E39BD6", "#8FA3B8", "#E8DC8A"]
+# green (long), red (short, callouts) and the link blue are kept out.
+PALETTE = ["#2F6FE0", "#E08A00", "#C2185B", "#7A4FD0", "#0E7C86", "#8C5A2B", "#6B7280", "#B08900"]
 HEAVY = TEXT
-LONG = "#9AD45A"
-SHORT = "#FF6A1A"
+LONG = "#1E8E3E"
+SHORT = "#D3202A"
 CALLOUT = SHORT
 
 _FONTS = Path(__file__).parent / "fonts"
 for _f in _FONTS.glob("*.ttf"):
     font_manager.fontManager.addfont(str(_f))
-TITLE_FONT = font_manager.FontProperties(fname=str(_FONTS / "NotoSerifJP-Black.ttf"))
+TITLE_FONT = font_manager.FontProperties(fname=str(_FONTS / "ZenKakuGothicNew-Black.ttf"))
 matplotlib.rcParams.update(
     {
         "font.family": ["BIZ UDGothic", "DejaVu Sans"],

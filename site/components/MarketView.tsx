@@ -5,7 +5,7 @@ import { age, bps, pct, shortAddr, usd, utc } from "../lib/format";
 import { chartHour, events, latestHour, market, seriesAt, topPositions } from "../lib/queries";
 import { EXPLORER, chartPng, slug, unslug } from "../lib/urls";
 import { Chart, Status } from "./Chart";
-import { Cls, H2 } from "./Tables";
+import { Cls, H2, Telop } from "./Tables";
 
 export const WINDOWS = ["7d", "30d", "90d"] as const;
 
@@ -63,13 +63,13 @@ export async function MarketView({ slugParam, window }: { slugParam: string; win
       <p className="sub">
         {m.label} · max {m.max_leverage}x
       </p>
-      <p className="lede">
+      <Telop>
         Whale net <b>{pct(v("whale_net"))}</b> of OI, 24h{" "}
         <b>
           <Cls x={v("whale_net_change")} />
         </b>
         .
-      </p>
+      </Telop>
       <dl className="spec">
         {spec.map(([k, val]) => (
           <div key={k}>

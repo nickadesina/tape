@@ -17,24 +17,21 @@ coverage, then optionally open the permalink, the market page, or the method.
 
 ## Direction contract
 
-THESIS: The tape as an episode title card. Each page opens on one heavy Mincho headline, white on near-black, the way
-a late-90s/2000s anime card or a Japanese broadcast caption does, then drops into calm dense data. Refuses the
-category default of a SaaS dashboard: no cards, no KPI tiles, no glow, no neon.
+THESIS: The tape as a broadcast caption. Each page opens on a red time tag, one heavy gothic headline and a white
+caption strip with the state of things, the way a 2000s Japanese news super frames a figure. Refuses the SaaS
+dashboard: no cards, no KPI tiles, no glow.
 
-OWN-WORLD: Ground ink #0b0a0f; hairlines #26232e; text #ecebe4; dim #9b97a8. Unit-01 palette without the robot:
-violet #b9a4ff for links and controls, green #9ad45a for long/positive, NERV orange #ff6a1a for short/negative and
-warnings. Display: Noto Serif JP Black (Matisse-like heavy Mincho). Body: BIZ UDPGothic. Figures: BIZ UDGothic,
-tabular. Section heads carry a small Japanese gloss (部門, 銘柄, 速報) and a solid orange square, 2000s Japanese
-portal style. Charts use the same ground, palette and faces.
+OWN-WORLD: Cool grey ground #f3f4f7, white plates, navy #121a4a bands and masthead, red #d3202a tabs, yellow
+#ffd23f as a marker only. Display Zen Kaku Gothic New Black; body BIZ UDPGothic; figures BIZ UDGothic. Section
+bands carry Japanese glosses in the red tab. Charts share ground, palette and faces.
 
-STORY: The reader sees the headline, the one-sentence state of the complex with its numbers, the chart, then legs and
-markets ranked by move. They believe it because coverage sits beside every number; they leave with a permalink.
+STORY: The reader sees the time tag, the headline, the caption strip with whale net, 24h move and coverage, then the
+chart, then legs and markets ranked by move. Coverage sits beside every number; they leave with a permalink.
 
-FIRST VIEWPORT: Top hairline header: TAPE 建玉 wordmark left, nav right with glosses. Status line in figures: as-of
-hour, coverage, sweep size. Title card headline at 36-64px. Lede sentence. The chart PNG begins inside the first
-viewport on desktop and right after the lede on phones.
+FIRST VIEWPORT: Navy masthead (TAPE 建玉, nav with glosses). Red time tag + white chip. Headline 32-66px. Caption
+strip with the 最新 tab. The chart begins inside the first viewport on desktop.
 
-FORM: Brief-pinned world (2000s Japanese / Eva, not overt); brief-pinned, no roll. seed: none (brief-pinned)
+FORM: Telop, direction C of six mockups (title card, vertical rail, telop, departure board, manual, signal); owner picked C. seed: none (owner pick)
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
@@ -45,4 +42,4 @@ beside whale net in every table is the one data device added.
 
 ## Unresolved
 
-Whether to add a light theme later; whether Japanese glosses stay after the owner sees them.
+Whether to add a dark theme later; a phone-sized chart render is still open.

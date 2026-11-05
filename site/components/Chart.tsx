@@ -47,7 +47,8 @@ export function Status({ hour, children }: { hour: Date | null; children?: React
   if (!hour)
     return (
       <p className="notice" role="status">
-        <b lang="ja">注意</b> No data yet: the indexer has not finished its first sweep.
+        <b lang="ja">注意</b>
+        <span>No data yet: the indexer has not finished its first sweep.</span>
       </p>
     );
   const behind = Date.now() - hour.getTime();
@@ -62,9 +63,11 @@ export function Status({ hour, children }: { hour: Date | null; children?: React
     );
   return (
     <p className="status">
-      <span className="ok">{utc(hour)}</span>
-      <span>{et(hour)}</span>
-      {children}
+      <span className="tag">{utc(hour)}</span>
+      <span className="chip">
+        {et(hour)}
+        {children && <> · {children}</>}
+      </span>
     </p>
   );
 }

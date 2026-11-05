@@ -8,7 +8,7 @@ import "./globals.css";
 
 // Subset to Latin plus the few Japanese glosses the site uses (SIL OFL, see fonts/).
 const display = localFont({
-  src: "./fonts/NotoSerifJP-Black.woff2",
+  src: "./fonts/ZenKakuGothicNew-Black.woff2",
   weight: "900",
   variable: "--f-display",
   display: "swap",
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", creator: HANDLE },
 };
 
-export const viewport: Viewport = { themeColor: "#0b0a0f", colorScheme: "dark" };
+export const viewport: Viewport = { themeColor: "#121a4a", colorScheme: "light" };
 
 function Mark() {
   return (

@@ -1,23 +1,33 @@
 /*
- * Ink ground, hairlines, one heavy Mincho voice for titles, BIZ UD Gothic for
- * everything read and every figure. Violet is for things you can press, green
- * for long, orange for short and for warnings. The chart PNGs use the same
+ * Telop: a 2000s Japanese broadcast caption, kept quiet. Cool grey ground,
+ * white plates, navy caption bands with a red tab, one heavy gothic voice for
+ * titles (Zen Kaku Gothic New Black), BIZ UD Gothic for everything read and
+ * every figure. Blue is for links, green for long, red for short and
+ * warnings, yellow only as a marker on navy. The chart PNGs use the same
  * tokens (tape/render.py); change both together.
  */
 :root {
-  color-scheme: dark;
-  --ink: #0b0a0f;
-  --panel: #131119;
-  --line: #26232e;
-  --line-strong: #3a3645;
-  --text: #ecebe4;
-  --dim: #9b97a8;
-  --violet: #b9a4ff;
-  --green: #9ad45a;
-  --orange: #ff6a1a;
+  color-scheme: light;
+  --ground: #f3f4f7;
+  --paper: #ffffff;
+  --zebra: #f7f8fb;
+  --line: #d7dae3;
+  --line-soft: #e4e6ec;
+  --text: #121733;
+  --dim: #4c5270;
+  --navy: #121a4a;
+  --navy-2: #2a3474;
+  --on-navy: #c9cde0;
+  --red: #d3202a;
+  --yellow: #ffd23f;
+  --link: #1a4fc4;
+  --long: #1e7a36;
+  --short: #c81d26;
+  --bar-long: #1e8e3e;
+  --bar-short: #d3202a;
   --gutter: 16px;
   --measure: 72ch;
-  --display: var(--f-display), "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --display: var(--f-display), "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
   --sans: var(--f-sans), "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
   --mono: var(--f-mono), ui-monospace, Menlo, Consolas, monospace;
 }
@@ -31,25 +41,24 @@
   box-sizing: border-box;
 }
 html {
-  background: var(--ink);
-  scrollbar-color: var(--line-strong) var(--ink);
+  background: var(--ground);
+  scrollbar-color: #9da2b5 var(--ground);
   -webkit-text-size-adjust: 100%;
 }
 body {
   margin: 0;
-  background: var(--ink);
+  background: var(--ground);
   color: var(--text);
   font: 16px/1.65 var(--sans);
   font-kerning: normal;
-  caret-color: var(--violet);
-  -webkit-font-smoothing: antialiased;
+  caret-color: var(--red);
 }
 ::selection {
-  background: var(--violet);
-  color: var(--ink);
+  background: var(--yellow);
+  color: var(--navy);
 }
 :focus-visible {
-  outline: 2px solid var(--violet);
+  outline: 2px solid var(--link);
   outline-offset: 3px;
 }
 
@@ -59,39 +68,39 @@ body {
   padding: 0 var(--gutter);
 }
 
-/* Masthead: wordmark, then the nav with its Japanese glosses. */
+/* Masthead: the navy station bar. */
 .masthead {
-  border-bottom: 1px solid var(--line);
+  background: var(--navy);
+  color: #fff;
 }
 .masthead .wrap {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  gap: 4px 24px;
-  padding-top: 14px;
-  padding-bottom: 12px;
+  column-gap: 24px;
 }
 .mark {
   display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-  color: var(--text);
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  color: inherit;
   text-decoration: none;
 }
 .mark b {
   font: 900 22px/1 var(--display);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .mark span {
-  font: 900 13px/1 var(--display);
-  color: var(--orange);
+  font: 900 12px/1 var(--display);
+  color: var(--yellow);
 }
 .nav {
   display: flex;
-  margin: 0 -10px;
-  max-width: calc(100% + 20px);
+  margin: 0 -12px;
+  max-width: calc(100% + 24px);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -107,58 +116,58 @@ body {
 .nav a {
   flex: none;
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
-  padding: 8px 10px;
-  color: var(--dim);
+  padding: 14px 12px;
+  color: #fff;
   text-decoration: none;
   font-size: 14px;
 }
 .nav a small {
   font-size: 10px;
-  color: var(--dim);
-  transition: color 120ms ease-out;
+  color: var(--on-navy);
 }
-.nav a:hover,
+.nav a:hover {
+  background: var(--navy-2);
+}
 .nav a[aria-current="page"] {
-  color: var(--text);
+  background: var(--navy-2);
+  box-shadow: inset 0 -3px 0 var(--yellow);
 }
-.nav a:hover small,
 .nav a[aria-current="page"] small {
-  color: var(--orange);
-}
-.nav a[aria-current="page"] {
-  box-shadow: inset 0 -2px 0 var(--orange);
+  color: var(--yellow);
 }
 
 main {
   padding-bottom: 32px;
 }
 
-/* The title card: one heavy Mincho headline per page. */
+/* Time tag: red clock box, then a white chip with the rest of the line. */
 .status {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 2px 18px;
-  margin: 28px 0 0;
-  font: 12px/1.6 var(--mono);
-  color: var(--dim);
+  margin: 36px 0 0;
+  font: 700 13px/1 var(--mono);
   font-variant-numeric: tabular-nums;
 }
-.status .ok::before {
-  content: "";
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 7px;
-  background: var(--green);
-  vertical-align: 1px;
+.status .tag {
+  padding: 8px 12px;
+  background: var(--red);
+  color: #fff;
+}
+.status .chip {
+  padding: 8px 12px;
+  background: var(--paper);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-left: 0;
+  font-weight: 400;
 }
 h1 {
-  margin: 14px 0 0;
-  max-width: 16em;
-  font: 900 clamp(34px, 6.2vw, 78px) / 1 var(--display);
-  letter-spacing: -0.02em;
+  margin: 18px 0 0;
+  max-width: 15em;
+  font: 900 clamp(32px, 5.2vw, 66px) / 1.12 var(--display);
+  letter-spacing: -0.01em;
   text-wrap: balance;
 }
 main > h1:first-child {
@@ -182,37 +191,66 @@ h1 + .sub {
   font-variant-numeric: tabular-nums;
 }
 
-/* Section heads: orange block, Mincho title, gloss, rule to the edge. */
+/* The caption strip: a yellow tab and a white plate holding the state of things. */
+.telop {
+  display: flex;
+  align-items: stretch;
+  max-width: 900px;
+  margin: 26px 0 0;
+  background: var(--paper);
+  box-shadow: 0 2px 10px rgba(18, 26, 74, 0.12);
+}
+.telop .tab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--yellow);
+  color: var(--navy);
+  font: 900 14px/1 var(--display);
+}
+.telop .lede {
+  margin: 0;
+  padding: 14px 18px;
+  max-width: none;
+}
+
+/* Section heads: red tab with the Japanese gloss, navy band with the title. */
 h2 {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: 56px 0 14px;
-  font: 900 22px/1.25 var(--display);
+  align-items: stretch;
+  margin: 56px 0 0;
+  font: 900 20px/1.2 var(--display);
+  color: #fff;
   scroll-margin-top: 16px;
-}
-h2::before {
-  content: "";
-  flex: none;
-  width: 0.42em;
-  height: 0.42em;
-  background: var(--orange);
-  transform: translateY(-0.08em);
-}
-h2::after {
-  content: "";
-  flex: 1;
-  min-width: 24px;
-  height: 1px;
-  background: var(--line);
-  transform: translateY(-0.3em);
 }
 h2 .ja {
   flex: none;
-  white-space: nowrap;
-  font: 700 11px/1 var(--sans);
-  color: var(--dim);
-  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  min-width: 12px;
+  padding: 0 14px;
+  background: var(--red);
+  font: 900 14px/1 var(--display);
+  letter-spacing: 0.06em;
+}
+h2 .ja:empty {
+  padding: 0;
+}
+h2 > span:last-child {
+  flex: 1;
+  padding: 10px 18px;
+  background: var(--navy);
+}
+h2 + .scroll,
+h2 + .note,
+h2 + p,
+h2 + ul,
+h2 + pre {
+  margin-top: 14px;
+}
+h2 + .scroll {
+  margin-top: 0;
 }
 h3 {
   margin: 28px 0 8px;
@@ -233,23 +271,25 @@ li {
   margin: 4px 0;
 }
 li::marker {
-  color: var(--dim);
+  color: var(--red);
 }
 
 a {
-  color: var(--violet);
+  color: var(--link);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--violet) 35%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--link) 35%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
 a:hover {
+  color: #0d2f80;
   text-decoration-color: currentColor;
 }
 
-/* Charts are plates: the PNG on the same ground, a caption rail under it. */
+/* Charts: a white plate with a caption rail. */
 figure {
   margin: 28px 0 0;
+  background: var(--paper);
   border: 1px solid var(--line);
 }
 /* On phones the plate runs edge to edge: every pixel of a 1200px chart counts. */
@@ -268,7 +308,7 @@ figure img {
   display: block;
   width: 100%;
   height: auto;
-  background: var(--ink);
+  background: var(--ground);
 }
 figcaption {
   display: flex;
@@ -280,38 +320,27 @@ figcaption {
   font: 12px/1.5 var(--mono);
   color: var(--dim);
 }
-figcaption a {
-  color: var(--dim);
-}
-figcaption a:hover {
-  color: var(--violet);
-}
 figcaption .grow {
   flex: 1;
 }
 
 button {
-  font: 12px/1.5 var(--sans);
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--line-strong);
-  padding: 3px 10px;
+  font: 700 12px/1.5 var(--sans);
+  color: #fff;
+  background: var(--navy);
+  border: 0;
+  padding: 6px 12px;
   cursor: pointer;
-  transition:
-    border-color 120ms ease-out,
-    color 120ms ease-out;
+  transition: background-color 120ms ease-out;
 }
 button:hover {
-  border-color: var(--violet);
-  color: var(--violet);
+  background: var(--navy-2);
 }
 button[data-state="copied"] {
-  border-color: var(--green);
-  color: var(--green);
+  background: var(--long);
 }
 button[data-state="failed"] {
-  border-color: var(--orange);
-  color: var(--orange);
+  background: var(--red);
 }
 
 /* Window switch on the market page. */
@@ -326,29 +355,29 @@ button[data-state="failed"] {
 }
 .seg {
   display: inline-flex;
-  border: 1px solid var(--line-strong);
-  font: 13px/1 var(--sans);
+  border: 1px solid var(--navy);
+  background: var(--paper);
+  font: 700 13px/1 var(--sans);
 }
 .seg > * {
   padding: 8px 14px;
-  color: var(--dim);
+  color: var(--navy);
   text-decoration: none;
 }
 .seg > * + * {
-  border-left: 1px solid var(--line-strong);
+  border-left: 1px solid var(--navy);
 }
 .seg a:hover {
-  color: var(--text);
-  background: var(--panel);
+  background: var(--zebra);
 }
 .seg [aria-current="page"] {
-  background: var(--text);
-  color: var(--ink);
-  font-weight: 700;
+  background: var(--navy);
+  color: #fff;
 }
 
-/* Tables: figures in the monospaced gothic, hairline rows. */
-.lede + .scroll {
+/* Tables: a white sheet, slate header row, striped rows, figures in the monospaced gothic. */
+.lede + .scroll,
+.telop + .scroll {
   margin-top: 28px;
 }
 .scroll {
@@ -358,28 +387,29 @@ button[data-state="failed"] {
 table {
   border-collapse: collapse;
   width: 100%;
+  background: var(--paper);
   font: 13.5px/1.45 var(--mono);
   font-variant-numeric: tabular-nums;
 }
 th,
 td {
   text-align: left;
-  padding: 7px 16px 7px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-soft);
   white-space: nowrap;
 }
-th:last-child,
-td:last-child {
-  padding-right: 0;
-}
 thead th {
-  font: 400 12px/1.4 var(--sans);
-  color: var(--dim);
-  border-bottom-color: var(--line-strong);
+  font: 700 12px/1.4 var(--sans);
+  color: #fff;
+  background: var(--dim);
+  border-bottom: 0;
   vertical-align: bottom;
 }
-tbody tr:hover {
-  background: var(--panel);
+tbody tr:nth-child(even) td {
+  background: var(--zebra);
+}
+tbody tr:hover td {
+  background: #fff6cc;
 }
 td.n,
 th.n {
@@ -388,6 +418,9 @@ th.n {
 td.wrapcell {
   white-space: normal;
   min-width: 18ch;
+}
+table.defs {
+  margin-top: 14px;
 }
 table.defs td:first-child {
   color: var(--text);
@@ -407,7 +440,7 @@ table.defs td:last-child {
   height: 9px;
   margin-right: 10px;
   vertical-align: -1px;
-  background: linear-gradient(var(--line-strong), var(--line-strong)) center / 1px 100% no-repeat;
+  background: linear-gradient(#9da2b5, #9da2b5) center / 1px 100% no-repeat;
 }
 .dv i {
   position: absolute;
@@ -417,20 +450,23 @@ table.defs td:last-child {
 }
 .dv.pos i {
   left: 50%;
-  background: var(--green);
+  background: var(--bar-long);
 }
 .dv.neg i {
   right: 50%;
-  background: var(--orange);
+  background: var(--bar-short);
 }
 
-/* Spec sheet on the market page: a two-column definition table, hairline rows. */
+/* Spec sheet on the market page: a two-column definition table on a white plate. */
 .spec {
   display: grid;
   grid-template-columns: 1fr;
-  column-gap: 40px;
-  max-width: 640px;
+  column-gap: 32px;
+  max-width: 680px;
   margin: 22px 0 0;
+  padding: 4px 16px;
+  background: var(--paper);
+  border: 1px solid var(--line);
 }
 @media (min-width: 720px) {
   .spec {
@@ -442,8 +478,8 @@ table.defs td:last-child {
   justify-content: space-between;
   align-items: baseline;
   gap: 16px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-soft);
 }
 .spec dt {
   font-size: 13px;
@@ -460,20 +496,27 @@ table.defs td:last-child {
   color: var(--dim);
 }
 
+/* Warning: a red caption with a yellow 注意 tab. */
 .notice {
   display: flex;
-  gap: 14px;
-  align-items: baseline;
-  margin: 28px 0 0;
-  padding: 10px 14px;
-  background: var(--orange);
-  color: var(--ink);
+  align-items: stretch;
+  margin: 36px 0 0;
+  background: var(--red);
+  color: #fff;
   font-weight: 700;
   font-size: 15px;
 }
 .notice b {
-  font: 900 14px/1 var(--display);
   flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--yellow);
+  color: var(--navy);
+  font: 900 14px/1 var(--display);
+}
+.notice span {
+  padding: 10px 14px;
 }
 
 .dim {
@@ -484,10 +527,10 @@ table.defs td:last-child {
   color: var(--dim);
 }
 .neg {
-  color: var(--orange);
+  color: var(--short);
 }
 .pos {
-  color: var(--green);
+  color: var(--long);
 }
 
 code,
@@ -497,14 +540,14 @@ pre {
 }
 code {
   padding: 1px 5px;
-  background: var(--panel);
+  background: var(--paper);
   border: 1px solid var(--line);
 }
 pre {
   margin: 12px 0;
   padding: 12px 14px;
   overflow-x: auto;
-  background: var(--panel);
+  background: var(--paper);
   border: 1px solid var(--line);
   line-height: 1.7;
 }
@@ -515,22 +558,27 @@ pre code {
 }
 
 footer {
-  margin-top: 48px;
-  border-top: 1px solid var(--line);
+  margin-top: 56px;
+  background: var(--navy);
+  color: var(--on-navy);
 }
 footer .wrap {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 24px;
   justify-content: space-between;
+  align-items: center;
   padding-top: 18px;
-  padding-bottom: 28px;
+  padding-bottom: 26px;
   font-size: 12px;
-  color: var(--dim);
 }
 footer p {
   margin: 0;
   max-width: 80ch;
+}
+footer .mark {
+  padding: 0;
+  color: #fff;
 }
 footer .mark b {
   font-size: 15px;
@@ -543,6 +591,6 @@ footer .mark b {
   }
   th,
   td {
-    padding-right: 12px;
+    padding: 8px 10px;
   }
 }

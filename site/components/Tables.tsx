@@ -23,17 +23,27 @@ export function Net({ x }: { x: number | null | undefined }) {
   );
 }
 
-/** Section head with its Japanese gloss (decorative; screen readers get the English). */
+/** Section head: red tab with the Japanese gloss (decorative), navy band with the title. */
 export function H2({ id, ja, children }: { id?: string; ja?: string; children: ReactNode }) {
   return (
     <h2 id={id}>
+      <span className="ja" lang="ja" aria-hidden="true">
+        {ja}
+      </span>
       <span>{children}</span>
-      {ja && (
-        <span className="ja" lang="ja" aria-hidden="true">
-          {ja}
-        </span>
-      )}
     </h2>
+  );
+}
+
+/** The caption strip: a yellow 最新 tab and a white plate holding the lede. */
+export function Telop({ children }: { children: ReactNode }) {
+  return (
+    <div className="telop">
+      <span className="tab" lang="ja" aria-hidden="true">
+        最新
+      </span>
+      <p className="lede">{children}</p>
+    </div>
   );
 }
 

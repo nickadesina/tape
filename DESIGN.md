@@ -1,8 +1,9 @@
 # Design
 
 The visual system of Positioning Tape: the site (`site/`) and the chart PNGs (`tape/render.py`) share it, so a
-screenshot of the site and a posted chart are the same picture. Direction: 2000s Japanese broadcast / Evangelion
-title card, kept quiet. Each page opens on one heavy Mincho headline on ink, then drops into calm, dense data.
+screenshot of the site and a posted chart are the same picture. Direction ("Telop", chosen 2026-11-05 from six
+mockups): a 2000s Japanese broadcast caption, kept quiet. Navy caption bands with a red tab, white plates on a
+cool grey ground, one heavy gothic voice for titles.
 
 ## Tokens
 
@@ -10,58 +11,59 @@ Defined in `site/app/globals.css` (`:root`) and mirrored in `tape/render.py`. Ch
 
 | Token | Value | Use |
 |---|---|---|
-| `--ink` | `#0b0a0f` | Page and chart ground. Dark only; there is no light theme. |
-| `--panel` | `#131119` | Row hover, code and pre ground. |
-| `--line` | `#26232e` | Hairlines: table rows, figure frames, section rules, chart grid. |
-| `--line-strong` | `#3a3645` | Table header rule, button and switch borders. |
-| `--text` | `#ecebe4` | Body text; the headline series in charts (whales, AI complex). |
-| `--dim` | `#9b97a8` | Secondary text, labels, glosses, tick labels. |
-| `--violet` | `#b9a4ff` | Links, focus ring, selection, hover on controls. Nothing else. |
-| `--green` | `#9ad45a` | Long / positive values and bars; "on time" status mark. |
-| `--orange` | `#ff6a1a` | Short / negative values, warnings (the 注意 band), section-head squares, current nav item. |
+| `--ground` | `#f3f4f7` | Page and chart ground. Light only. |
+| `--paper` | `#ffffff` | Plates: tables, figures, the caption strip, the spec sheet. |
+| `--zebra` | `#f7f8fb` | Even table rows. |
+| `--line` / `--line-soft` | `#d7dae3` / `#e4e6ec` | Plate borders / row rules; chart grid uses `--line`. |
+| `--text` | `#121733` | Body text; the headline series in charts (whales, AI complex). |
+| `--dim` | `#4c5270` | Secondary text, table header band. |
+| `--navy` / `--navy-2` | `#121a4a` / `#2a3474` | Masthead, section bands, footer, buttons / hover and current nav item. |
+| `--on-navy` | `#c9cde0` | Secondary text on navy. |
+| `--red` | `#d3202a` | Section-head tabs, the time tag, the warning caption, short bars. |
+| `--yellow` | `#ffd23f` | Only as a marker: the 最新 tab, the 注意 tab, the current-nav underline, selection. |
+| `--link` | `#1a4fc4` | Links and focus ring. |
+| `--long` / `--short` | `#1e7a36` / `#c81d26` | Signed figures as text. Bars use `#1e8e3e` / `#d3202a`. |
 
-Chart series palette (`PALETTE` in render.py), in legend order, deliberately free of green, orange and violet:
-`#5CC8E0 #F0B84A #FF7AA8 #7F9CFF #C9B99A #E39BD6 #8FA3B8 #E8DC8A`. Chart callouts take green or orange by the sign
-of the value they label.
+Chart series palette (`PALETTE` in render.py), in legend order, free of the long, short and link colours:
+`#2F6FE0 #E08A00 #C2185B #7A4FD0 #0E7C86 #8C5A2B #6B7280 #B08900`. Chart callouts take green or red by sign.
 
 ## Type
 
-Self-hosted, subset to Latin plus the Japanese glosses below (SIL OFL; sources and licences in `site/app/fonts/` and
-`tape/fonts/`). Re-subset with `fonttools subset` if a new glyph is needed.
+Self-hosted, subset to Latin plus the Japanese glosses below (SIL OFL; licences in `site/app/fonts/` and
+`tape/fonts/`). Re-subset with `fonttools subset` when a new glyph is needed.
 
-- Display: **Noto Serif JP Black** (900). Page titles (`h1`, `clamp(34px, 6.2vw, 78px)`, leading 1.0, tracking
-  -0.02em, balanced), section heads (`h2`, 22px), the wordmark, chart titles.
+- Display: **Zen Kaku Gothic New Black** (900). Page titles (`clamp(32px, 5.2vw, 66px)`, leading 1.12), section
+  bands (20px), tabs, the wordmark, chart titles.
 - Body: **BIZ UDPGothic** 400/700, 16px / 1.65, measure 72ch. Lede 18px.
-- Figures: **BIZ UDGothic** 400/700 (half-width monospaced Latin), tabular. Tables 13.5px, status line and captions
-  12px, chart ticks and labels.
+- Figures: **BIZ UDGothic** 400/700 (half-width monospaced Latin), tabular. Tables 13.5px, captions 12px,
+  the time tag, chart ticks.
 
 ## Signature elements
 
-- **Title card**: status line (hour UTC, hour ET, sweep) above a single heavy Mincho `h1`.
-- **Section head**: orange 0.42em square, Mincho title, small Japanese gloss in `--dim`, hairline to the right edge.
-  Glosses: 部門 legs, 銘柄 markets, 速報 events/alerts, 手法 method, 資料 data, 上位 top addresses, 建玉 (open
-  positions) beside the wordmark, 注意 on the warning band. Glosses are `aria-hidden` and `lang="ja"`.
-- **Diverging bar** beside whale net in every table: 56px track (36px on phones), zero in the middle, ±100% of OI at
-  the ends, green right, orange left.
-- **Plates**: charts sit in a hairline frame on the same ground with a caption rail (permalink, png, copy image).
-  Edge to edge under 720px.
-- **Warning band**: solid orange, ink text, 注意 in Mincho. Replaces the status line when the indexer is two or more
+- **Time tag**: red box with the UTC hour, white chip with ET and the sweep size. Above every title.
+- **Caption strip** (home, market): yellow 最新 ("latest") tab, white plate with the lede, soft shadow.
+- **Section band**: red tab with the Japanese gloss, navy band with the English title; the table's slate header
+  row sits directly under it. Glosses: 部門 legs, 銘柄 markets, 速報 events, 上位 top addresses, 資料 data; 建玉
+  (open positions) beside the wordmark. Glosses are `aria-hidden` and `lang="ja"`. A band without a gloss keeps a
+  12px red tab.
+- **Warning caption**: red strip, white text, yellow 注意 tab. Replaces the time tag when the indexer is two or more
   hours behind or has no data.
+- **Diverging bar** beside whale net: 56px (36px on phones), zero in the middle, ±100% of OI at the ends.
+- **Plates**: charts on white with a caption rail (permalink, png, copy image); edge to edge under 720px.
 
 ## Components
 
-- Tables: no vertical rules, hairline rows, header in body face 12px `--dim`, numeric columns right-aligned. Column
-  order puts coverage right after whale net and 24h.
-- Definition table (`.spec`, market page): label left, figure right, two columns on desktop, one on phones.
-- Window switch (`.seg`): bordered segmented control; current item inverted (text on ink → ink on text).
-- Buttons: transparent, 1px `--line-strong` border, violet on hover; copy state green (copied) or orange (failed).
-- Nav: lowercase labels with glosses; current item has an orange 2px underline. Scrolls horizontally on phones with
-  a right-edge fade.
+- Tables: white sheet, slate header row with white labels, zebra rows, yellow-tint hover, numbers right-aligned;
+  coverage right after whale net and 24h.
+- Spec sheet (market page): two-column definition table on a white plate.
+- Window switch: navy-bordered segmented control, current item navy with white text.
+- Buttons: navy fill, white text; green when copied, red when the copy failed.
+- Nav: white on the navy masthead with small glosses; current item lighter navy with a yellow underline.
 
 ## Rules
 
-- No cards, KPI tiles, glow, gradients, or drop shadows. Depth is hairlines only.
+- No cards, KPI tiles, gradients, glow. One soft shadow, on the caption strip only.
 - No motion beyond 120ms colour transitions on hover.
-- Japanese stays a gloss layer: never the only label, never set in running text, never emblems or flags.
-- Browser surfaces are themed: `::selection` violet, caret violet, focus ring violet, scrollbar `--line-strong`.
-- Body and labels meet 4.5:1 on `--ink` (`--dim` is about 6.7:1).
+- Yellow is a marker, never a text colour on the light ground.
+- Japanese stays a gloss layer: never the only label, never in running text, never emblems or flags.
+- Body and labels meet 4.5:1 (`--dim` on `--ground` is about 7:1).

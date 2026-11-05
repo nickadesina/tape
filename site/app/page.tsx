@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Chart, Status } from "../components/Chart";
-import { Cls, H2, MarketTable, Net } from "../components/Tables";
+import { Cls, H2, MarketTable, Net, Telop } from "../components/Tables";
 import { pct, usd } from "../lib/format";
 import { chartHour, lastSweep, latestHour, legs, markets, seriesAt } from "../lib/queries";
 import { chartPng, slug } from "../lib/urls";
@@ -37,11 +37,11 @@ export default async function Home() {
   return (
     <>
       <Status hour={hour}>
-        {sweep?.finished_at && <span>sweep of {sweep.addresses ?? 0} address-dex pairs</span>}
+        {sweep?.finished_at ? `sweep of ${sweep.addresses ?? 0} address-dex pairs` : null}
       </Status>
       <h1>Who is positioned which way in the AI complex on Hyperliquid</h1>
       {hour && (
-        <p className="lede">
+        <Telop>
           Complex whale net <b>{pct(cx.whale_net?.value)}</b> of open interest, 24h{" "}
           <b>
             <Cls x={cx.whale_net_change?.value} />
@@ -57,7 +57,7 @@ export default async function Home() {
               .
             </>
           )}
-        </p>
+        </Telop>
       )}
       {chartH && <Chart kind="home" subject="complex" hour={chartH} alt="Whale net positioning, AI complex" priority />}
 

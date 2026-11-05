@@ -47,7 +47,8 @@ The site is read-only Next.js on Vercel, revalidating every five minutes.
 - Voice: plain, exact, unhyped. "Not advice; the tape says who is positioned where, not what to buy."
 - The site and the posted charts share one look: a screenshot of the site and a post are the same picture.
 - Owner direction (2026-11-05): 2000s Japanese / Evangelion-adjacent feel, not overtly so. The owner invited
-  experimentation; earlier rules (monospace everywhere, no dark mode, default matplotlib look) may change.
+  experimentation; earlier rules (monospace everywhere, default matplotlib look) may change. Picked the "Telop"
+  direction (broadcast caption, light) from six mockups on 2026-11-05.
 
 ## Evidence on Hand
 
