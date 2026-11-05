@@ -22,8 +22,11 @@ legs:
   neoclouds:
     label: Neoclouds
     markets: [xyz:CRWV, xyz:NBIS, xyz:IREN, io:NBIS]
+  # xyz:DRAM is the Roundhill Memory ETF (Cboe: DRAM), not a DRAM price index
+  # (trade[XYZ] specification index); io:DRAM trades at the same price. The key
+  # stays memory_price because published series are keyed on it.
   memory_price:
-    label: Memory price
+    label: Memory ETF
     markets: [xyz:DRAM, io:DRAM]
   memory_names:
     label: Memory names

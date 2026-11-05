@@ -13,7 +13,7 @@ design stands as written.
 | Leg | Markets | Change from the doc |
 |---|---|---|
 | Neoclouds | xyz:CRWV, xyz:NBIS, xyz:IREN, io:NBIS | The open question is answered: xyz lists NBIS and IREN. |
-| Memory price | xyz:DRAM, io:DRAM | |
+| Memory ETF | xyz:DRAM, io:DRAM | xyz:DRAM is the Roundhill Memory ETF (Cboe: DRAM), not a DRAM price index; the leg was first mislabeled "Memory price". |
 | Memory names | xyz:MU, xyz:SKHX, xyz:SKHY, xyz:SMSN, xyz:SNDK, xyz:CXMT, io:SNDK | |
 | Silicon | xyz:NVDA, xyz:AMD, xyz:INTC, io:NVDA | |
 | Compute ETFs | xyz:LYTE, xyz:NCLD | |

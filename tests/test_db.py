@@ -42,7 +42,7 @@ def conn(s):
 
 
 def seed(conn, hours: int) -> None:
-    for k, label, i in (("neoclouds", "Neoclouds", 0), ("memory_price", "Memory price", 1), ("silicon", "Silicon", 2)):
+    for k, label, i in (("neoclouds", "Neoclouds", 0), ("memory_price", "Memory ETF", 1), ("silicon", "Silicon", 2)):
         conn.execute("insert into legs values (%s, %s, %s)", (k, label, i))
     for coin, (dex, leg, _) in MARKETS.items():
         conn.execute("insert into markets (coin, dex, leg) values (%s, %s, %s)", (coin, dex, leg))
