@@ -20,6 +20,9 @@ from .events import describe
 from .render import (
     HEAVY,
     PALETTE,
+    PHONE_CARD,
+    PHONE_GRID,
+    PHONE_PANELS,
     Bar,
     Callout,
     ChartSize,
@@ -87,7 +90,7 @@ def last_coverage(points) -> float | None:
     return None
 
 
-def home_chart(conn, s: Settings, hour: datetime) -> tuple[bytes, dict]:
+def home_chart(conn, s: Settings, hour: datetime, phone: bool = False) -> tuple[bytes, dict]:
     """The daily chart: complex and every leg, whale net over 30 days, a bar
     strip of today's 24h change per leg, and the biggest mover called out."""
     days = int(s.t("daily", "window_days"))
@@ -131,7 +134,7 @@ def home_chart(conn, s: Settings, hour: datetime) -> tuple[bytes, dict]:
         marker=None,
         footer=footer(s, hour, note),
         dashed_below=thr,
-        size=ChartSize(int(s.t("render", "width_px")), int(s.t("render", "height_px"))),
+        size=PHONE_CARD if phone else ChartSize(int(s.t("render", "width_px")), int(s.t("render", "height_px"))),
         xlim=(hour - timedelta(days=days), hour),
     )
     info = {
@@ -144,7 +147,7 @@ def home_chart(conn, s: Settings, hour: datetime) -> tuple[bytes, dict]:
     return png, info
 
 
-def legs_chart(conn, s: Settings, hour: datetime) -> bytes:
+def legs_chart(conn, s: Settings, hour: datetime, phone: bool = False) -> bytes:
     days = int(s.t("daily", "window_days"))
     thr = float(s.t("coverage", "dashed_below"))
     legs = legs_in_order(conn)
@@ -158,11 +161,12 @@ def legs_chart(conn, s: Settings, hour: datetime) -> bytes:
         panels=panels,
         footer=footer(s, hour),
         dashed_below=thr,
+        size=PHONE_GRID if phone else None,
         xlim=(hour - timedelta(days=days), hour),
     )
 
 
-def market_chart(conn, s: Settings, coin: str, hour: datetime, days: int) -> bytes:
+def market_chart(conn, s: Settings, coin: str, hour: datetime, days: int, phone: bool = False) -> bytes:
     thr = float(s.t("coverage", "dashed_below"))
     metrics = [m for m, _, _ in MARKET_PANELS] + ["mid_net", "small_net"]
     data = load_series(conn, [coin], metrics, hour - timedelta(days=days), hour)
@@ -180,11 +184,14 @@ def market_chart(conn, s: Settings, coin: str, hour: datetime, days: int) -> byt
         panels=panels,
         footer=footer(s, hour),
         dashed_below=thr,
+        size=PHONE_PANELS if phone else None,
         xlim=(hour - timedelta(days=days), hour),
     )
 
 
-def card_chart(conn, s: Settings, coin: str, hour: datetime, marker: Marker | None = None, days: int = 7) -> bytes:
+def card_chart(
+    conn, s: Settings, coin: str, hour: datetime, marker: Marker | None = None, days: int = 7, phone: bool = False
+) -> bytes:
     """One market, the daily chart's panel zoomed to `days`."""
     thr = float(s.t("coverage", "dashed_below"))
     data = load_series(
@@ -208,9 +215,18 @@ def card_chart(conn, s: Settings, coin: str, hour: datetime, marker: Marker | No
         marker=marker,
         footer=footer(s, hour, note),
         dashed_below=thr,
-        size=ChartSize(int(s.t("render", "width_px")), int(s.t("render", "height_px"))),
+        size=PHONE_CARD if phone else ChartSize(int(s.t("render", "width_px")), int(s.t("render", "height_px"))),
         xlim=(hour - timedelta(days=days), hour),
     )
+
+
+# Phone versions live beside the desktop ones under kind + PHONE_SUFFIX
+# ("home-m"); the site serves them to narrow screens when they exist.
+PHONE_SUFFIX = "-m"
+
+
+def _wh(size: ChartSize) -> tuple[int, int]:
+    return (size.width, size.height)
 
 
 def render_hour(conn, s: Settings, hour: datetime) -> int:
@@ -221,7 +237,10 @@ def render_hour(conn, s: Settings, hour: datetime) -> int:
     png, _ = home_chart(conn, s, hour)
     store.put(conn, "home", COMPLEX, hour, png, size)
     store.put(conn, "legs", "all", hour, legs_chart(conn, s, hour), size)
-    n += 2
+    png, _ = home_chart(conn, s, hour, phone=True)
+    store.put(conn, "home" + PHONE_SUFFIX, COMPLEX, hour, png, _wh(PHONE_CARD))
+    store.put(conn, "legs" + PHONE_SUFFIX, "all", hour, legs_chart(conn, s, hour, phone=True), _wh(PHONE_GRID))
+    n += 4
     coins = [r["coin"] for r in conn.execute("select coin from markets where active order by coin")]
     for c in coins:
         has = conn.execute("select 1 from series where subject = %s and hour = %s limit 1", (c, hour)).fetchone()
@@ -229,9 +248,12 @@ def render_hour(conn, s: Settings, hour: datetime) -> int:
             continue
         for d in WINDOWS:
             store.put(conn, "market", f"{c}@{d}d", hour, market_chart(conn, s, c, hour, d), (1200, 1000))
-            n += 1
+            png = market_chart(conn, s, c, hour, d, phone=True)
+            store.put(conn, "market" + PHONE_SUFFIX, f"{c}@{d}d", hour, png, _wh(PHONE_PANELS))
+            n += 2
         store.put(conn, "card", c, hour, card_chart(conn, s, c, hour), size)
-        n += 1
+        store.put(conn, "card" + PHONE_SUFFIX, c, hour, card_chart(conn, s, c, hour, phone=True), _wh(PHONE_CARD))
+        n += 2
     prune(conn, s, hour)
     log.info("rendered %d charts for %s", n, hour_key(hour))
     return n
@@ -245,13 +267,13 @@ def prune(conn, s: Settings, hour: datetime) -> None:
     keep_days = int(s.t("render", "hourly_retention_days"))
     daily_hour = int(s.t("daily", "snapshot_hour_et"))
     conn.execute(
-        """delete from charts where kind in ('home', 'legs', 'card') and hour < %s
+        """delete from charts where kind in ('home', 'legs', 'card', 'home-m', 'legs-m', 'card-m') and hour < %s
              and extract(hour from hour at time zone 'America/New_York') <> %s""",
         (hour - timedelta(days=keep_days), daily_hour),
     )
     # Market panels are the bulk; keep two days of them plus the daily hour.
     conn.execute(
-        """delete from charts where kind = 'market' and hour < %s
+        """delete from charts where kind in ('market', 'market-m') and hour < %s
              and extract(hour from hour at time zone 'America/New_York') <> %s""",
         (hour - timedelta(days=2), daily_hour),
     )

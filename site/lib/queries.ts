@@ -59,6 +59,12 @@ export async function chart(kind: string, subject: string, hour: Date) {
   return (r[0] as { path: string | null; bytes: Buffer | null; width: number; height: number } | undefined) ?? null;
 }
 
+/** Size of a stored chart without its bytes: whether it exists, and its pixels. */
+export async function chartSize(kind: string, subject: string, hour: Date) {
+  const r = await sql`select width, height from charts where kind = ${kind} and subject = ${subject} and hour = ${hour}`;
+  return (r[0] as { width: number; height: number } | undefined) ?? null;
+}
+
 export type TopRow = {
   rank: number;
   address: string;

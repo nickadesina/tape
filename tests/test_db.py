@@ -99,6 +99,10 @@ def test_metrics_charts_and_daily(conn, s):
     assert crwv["value"] < -0.5
     kinds = {r["kind"] for r in conn.execute("select distinct kind from charts")}
     assert {"home", "legs", "market", "card"} <= kinds
+    # Every chart the site shows also has a portrait phone version.
+    assert {"home-m", "legs-m", "market-m", "card-m"} <= kinds
+    phone = conn.execute("select width, height from charts where kind = 'home-m' limit 1").fetchone()
+    assert (phone["width"], phone["height"]) == (1080, 1350)
     png = conn.execute("select bytes from charts where kind = 'home' limit 1").fetchone()["bytes"]
     assert bytes(png[:8]) == b"\x89PNG\r\n\x1a\n"
     ev = {r["kind"] for r in conn.execute("select kind from events")}

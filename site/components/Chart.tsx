@@ -1,11 +1,16 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { et, utc } from "../lib/format";
-import { chartPage, chartPng } from "../lib/urls";
+import { chartSize } from "../lib/queries";
+import { PHONE_MEDIA, PHONE_SUFFIX, chartPage, chartPng } from "../lib/urls";
 import { CopyImage } from "./CopyImage";
 
-/** A chart, its pinned-hour permalink, and a copy button. Nothing else in the way. */
-export function Chart({
+/**
+ * A chart, its pinned-hour permalink, and a copy button. Nothing else in the way.
+ * Narrow screens get the portrait phone render when that hour has one; the png
+ * link and the copy button always use the full-size chart, the one that is posted.
+ */
+export async function Chart({
   kind,
   subject,
   hour,
@@ -23,11 +28,22 @@ export function Chart({
   priority?: boolean;
 }) {
   const src = chartPng(kind, subject, hour);
+  const phone = await chartSize(kind + PHONE_SUFFIX, subject, hour);
   return (
     <figure>
       {/* Plain img: the PNG is already the final pixels, rendered by the same code as the posts. */}
       <a href={src} aria-label={`${alt}, full-size PNG`}>
-        <img src={src} alt={alt} width={width} height={height} fetchPriority={priority ? "high" : "auto"} />
+        <picture>
+          {phone && (
+            <source
+              media={PHONE_MEDIA}
+              srcSet={chartPng(kind + PHONE_SUFFIX, subject, hour)}
+              width={phone.width}
+              height={phone.height}
+            />
+          )}
+          <img src={src} alt={alt} width={width} height={height} fetchPriority={priority ? "high" : "auto"} />
+        </picture>
       </a>
       <figcaption>
         <Link href={chartPage(kind, subject, hour)}>permalink {utc(hour)}</Link>

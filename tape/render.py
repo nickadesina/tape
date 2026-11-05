@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import math
+import textwrap
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -108,15 +109,36 @@ class Footer:
 
 @dataclass
 class ChartSize:
+    """Pixel size of the PNG. `scale` above 1 draws a phone chart: the same
+    pixels on a smaller canvas, so every font and line comes out `scale` times
+    larger, and the layouts switch to a portrait arrangement."""
+
     width: int = 1200
     height: int = 675
+    scale: float = 1.0
     extra: dict = field(default_factory=dict)
 
+    @property
+    def phone(self) -> bool:
+        return self.scale > 1
 
-def _figure(w: int, h: int) -> Figure:
-    fig = Figure(figsize=(w / 100, h / 100), dpi=100, facecolor=INK)
+
+# Phone versions, served to narrow screens. 1080 px wide at 2x: a 1200 px
+# chart shown at phone width sets 10 pt labels at about 3 px; these at about 9.
+PHONE_CARD = ChartSize(1080, 1350, scale=2.0)
+PHONE_GRID = ChartSize(1080, 1500, scale=2.0)
+PHONE_PANELS = ChartSize(1080, 1900, scale=2.0)
+
+
+def _figure(size: ChartSize) -> Figure:
+    k = size.scale
+    fig = Figure(figsize=(size.width / (100 * k), size.height / (100 * k)), dpi=100 * k, facecolor=INK)
     FigureCanvasAgg(fig)
     return fig
+
+
+def _wrap(text: str, size: ChartSize, width: int = 36) -> str:
+    return textwrap.fill(text, width) if size.phone else text
 
 
 def _png(fig: Figure) -> bytes:
@@ -203,14 +225,16 @@ def _date_axis(ax, span_days: float, xlim: tuple[datetime, datetime] | None = No
     if xlim:
         ax.set_xlim(*xlim)
         span_days = (xlim[1] - xlim[0]).total_seconds() / 86400
-    ax.xaxis.set_major_locator(AutoDateLocator(minticks=3, maxticks=maxticks))
+    ax.xaxis.set_major_locator(AutoDateLocator(minticks=min(3, maxticks - 1), maxticks=maxticks))
     ax.xaxis.set_major_formatter(DateFormatter("%b %d" if span_days > 2 else "%H:%M"))
 
 
-def _footer(fig: Figure, footer: Footer) -> None:
+def _footer(fig: Figure, footer: Footer, size: ChartSize | None = None) -> None:
     fig.text(0.99, 0.014, f"{footer.handle}  {footer.date_text}", ha="right", va="bottom", fontsize=11, color=TEXT)
     if footer.note:
-        fig.text(0.01, 0.014, footer.note, ha="left", va="bottom", fontsize=9, color=DIM)
+        # On a phone chart the note gets its own line above the handle.
+        y = 0.014 + (0.022 if size is not None and size.phone else 0)
+        fig.text(0.01, y, footer.note, ha="left", va="bottom", fontsize=9, color=DIM)
 
 
 def render_card(
@@ -229,16 +253,26 @@ def render_card(
     """One panel of lines (whale net as a share of OI), an optional bar strip
     under it (the day's change per line), and an optional hand-drawn callout."""
     size = size or ChartSize()
-    fig = _figure(size.width, size.height)
+    phone = size.phone
+    fig = _figure(size)
+    # Phone: title across the top, legend under it, the plot full width.
+    box = (
+        dict(left=0.14, right=0.94, top=0.79, bottom=0.10)
+        if phone
+        else dict(left=0.07, right=0.80, top=0.91, bottom=0.10)
+    )
     if bars:
-        gs = fig.add_gridspec(2, 1, height_ratios=[4, 1.1], hspace=0.35, left=0.07, right=0.80, top=0.91, bottom=0.10)
+        gs = fig.add_gridspec(2, 1, height_ratios=[3.2, 1.3] if phone else [4, 1.1], hspace=0.4, **box)
         ax = fig.add_subplot(gs[0])
         axb = fig.add_subplot(gs[1])
     else:
         ax = fig.add_subplot(111)
-        fig.subplots_adjust(left=0.07, right=0.80, top=0.91, bottom=0.10)
+        fig.subplots_adjust(**box)
         axb = None
-    _title(ax, title, 15)
+    if phone:
+        _suptitle(fig, _wrap(title, size), 0.04, 0.975, 14)
+    else:
+        _title(ax, title, 15)
     _style_axes(ax, "pct")
     _zero(ax)
     span = 1.0
@@ -247,8 +281,11 @@ def render_card(
         span = (max(all_x) - min(all_x)).total_seconds() / 86400
     for ln in lines:
         _plot_line(ax, ln, dashed_below, 3.2 if ln.heavy else 1.6)
-    _date_axis(ax, span, _clip(xlim, all_x))
-    _legend(ax, loc="upper left", bbox_to_anchor=(1.01, 1.0), fontsize=10)
+    _date_axis(ax, span, _clip(xlim, all_x), maxticks=5 if phone else 10)
+    if phone:
+        _legend(ax, loc="lower left", bbox_to_anchor=(-0.02, 1.03), fontsize=8.5, ncol=3, borderaxespad=0)
+    else:
+        _legend(ax, loc="upper left", bbox_to_anchor=(1.01, 1.0), fontsize=10)
 
     if callout:
         target = next((ln for ln in lines if ln.label == callout.line_label), None)
@@ -262,10 +299,10 @@ def render_card(
             ax.annotate(
                 callout.text,
                 xy=(t, v),
-                xytext=(-150, 60 if dy > 0 else -60),
+                xytext=(-120 if phone else -150, 50 if dy > 0 else -50),
                 textcoords="offset points",
                 color=cc,
-                fontsize=13,
+                fontsize=11 if phone else 13,
                 fontweight="bold",
                 arrowprops=dict(arrowstyle="->", color=cc, lw=2, connectionstyle="arc3,rad=-0.35"),
             )
@@ -289,7 +326,7 @@ def render_card(
         _zero(axb)
         _style_axes(axb, "pct")
         axb.set_title(bars_title, loc="left", fontsize=10, color=DIM)
-        axb.tick_params(axis="x", labelsize=9)
+        axb.tick_params(axis="x", labelsize=8 if phone else 9)
         lim = max([abs(v) for v in vals] + [0.001]) * 1.5
         axb.set_ylim(-lim, lim)
         for i, b in enumerate(bars):
@@ -303,7 +340,7 @@ def render_card(
                     fontsize=9,
                     color=TEXT,
                 )
-    _footer(fig, footer)
+    _footer(fig, footer, size)
     return _png(fig)
 
 
@@ -318,13 +355,18 @@ def render_panels(
 ) -> bytes:
     """A market page chart: stacked panels sharing the time axis."""
     size = size or ChartSize(1200, 1000)
-    fig = _figure(size.width, size.height)
+    phone = size.phone
+    fig = _figure(size)
     n = len(panels)
     axes = fig.subplots(n, 1, sharex=True)
     if n == 1:
         axes = [axes]
-    fig.subplots_adjust(left=0.08, right=0.97, top=0.9, bottom=0.06, hspace=0.55)
-    _suptitle(fig, title, 0.08, 0.975, 16)
+    if phone:
+        fig.subplots_adjust(left=0.15, right=0.94, top=0.9, bottom=0.07, hspace=0.8)
+        _suptitle(fig, _wrap(title, size, 30), 0.04, 0.985, 14)
+    else:
+        fig.subplots_adjust(left=0.08, right=0.97, top=0.9, bottom=0.06, hspace=0.55)
+        _suptitle(fig, title, 0.08, 0.975, 16)
     span = 1.0
     for ax, p in zip(axes, panels, strict=True):
         _style_axes(ax, p.fmt)
@@ -334,12 +376,17 @@ def render_panels(
             _plot_line(ax, ln, dashed_below, 1.8)
             if ln.points:
                 span = max(span, (ln.points[-1][0] - ln.points[0][0]).total_seconds() / 86400)
-        ax.set_title(p.title, loc="left", fontsize=11, color=TEXT)
+        ax.set_title(p.title, loc="left", fontsize=10 if phone else 11, color=TEXT)
         if len(p.lines) > 1:
-            _legend(ax, loc="upper left", fontsize=8, ncol=len(p.lines))
+            if phone:  # beside the panel title, clear of the data
+                _legend(
+                    ax, loc="lower right", bbox_to_anchor=(1.0, 1.0), fontsize=8, ncol=len(p.lines), borderaxespad=0.2
+                )
+            else:
+                _legend(ax, loc="upper left", fontsize=8, ncol=len(p.lines))
     all_x = [pt[0] for p in panels for ln in p.lines for pt in ln.points]
-    _date_axis(axes[-1], span, _clip(xlim, all_x))
-    _footer(fig, footer)
+    _date_axis(axes[-1], span, _clip(xlim, all_x), maxticks=4 if phone else 10)
+    _footer(fig, footer, size)
     return _png(fig)
 
 
@@ -355,11 +402,18 @@ def render_grid(
 ) -> bytes:
     """Small multiples, one panel per leg, same y scale."""
     size = size or ChartSize()
-    fig = _figure(size.width, size.height)
+    phone = size.phone
+    if phone:
+        cols = 2
+    fig = _figure(size)
     rows = max(1, math.ceil(len(panels) / cols))
     axes = fig.subplots(rows, cols, sharex=True, sharey=True, squeeze=False)
-    fig.subplots_adjust(left=0.07, right=0.98, top=0.86, bottom=0.12, hspace=0.5, wspace=0.12)
-    _suptitle(fig, title, 0.07, 0.965, 16)
+    if phone:
+        fig.subplots_adjust(left=0.14, right=0.95, top=0.88, bottom=0.08, hspace=0.65, wspace=0.15)
+        _suptitle(fig, _wrap(title, size, 30), 0.04, 0.98, 14)
+    else:
+        fig.subplots_adjust(left=0.07, right=0.98, top=0.86, bottom=0.12, hspace=0.5, wspace=0.12)
+        _suptitle(fig, title, 0.07, 0.965, 16)
     span = 1.0
     for i, ax in enumerate(axes.flat):
         if i >= len(panels):
@@ -382,15 +436,15 @@ def render_grid(
         if i < len(panels) and i + cols >= len(panels):
             ax.xaxis.set_tick_params(labelbottom=True)
     all_x = [pt[0] for _, ln in panels for pt in ln.points]
-    _date_axis(axes.flat[0], span, _clip(xlim, all_x), maxticks=4)
-    _footer(fig, footer)
+    _date_axis(axes.flat[0], span, _clip(xlim, all_x), maxticks=3 if phone else 4)
+    _footer(fig, footer, size)
     return _png(fig)
 
 
 def render_notice(*, text: str, footer: Footer, size: ChartSize | None = None) -> bytes:
     """A plain card for when there is no chart to show (gap day, no data yet)."""
     size = size or ChartSize()
-    fig = _figure(size.width, size.height)
+    fig = _figure(size)
     fig.text(0.05, 0.6, text, fontproperties=TITLE_FONT, fontsize=26, va="center", wrap=True, color=TEXT)
-    _footer(fig, footer)
+    _footer(fig, footer, size)
     return _png(fig)

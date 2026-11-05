@@ -42,4 +42,4 @@ beside whale net in every table is the one data device added.
 
 ## Unresolved
 
-Whether to add a dark theme later; a phone-sized chart render is still open.
+Whether to add a dark theme later.

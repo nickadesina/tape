@@ -50,6 +50,10 @@ Self-hosted, subset to Latin plus the Japanese glosses below (SIL OFL; licences 
   hours behind or has no data.
 - **Diverging bar** beside whale net: 56px (36px on phones), zero in the middle, ±100% of OI at the ends.
 - **Plates**: charts on white with a caption rail (permalink, png, copy image); edge to edge under 720px.
+- **Phone charts**: every chart the site shows (home, legs, market card, metric panels) is also rendered as a
+  portrait PNG 1080px wide at 2x scale (`PHONE_*` in render.py), stored as kind + `-m` (`home-m`). Under 720px
+  the site serves it through `<picture>`; the png link and copy button keep the full-size chart that is posted.
+  Hours rendered before the phone version existed fall back to the desktop image.
 
 ## Components
 

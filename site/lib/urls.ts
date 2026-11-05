@@ -24,6 +24,11 @@ export function parseHourKey(k: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** Phone versions of a chart are stored under kind + this suffix ("home-m"). */
+export const PHONE_SUFFIX = "-m";
+/** Below this width the site serves the phone version (matches globals.css). */
+export const PHONE_MEDIA = "(max-width: 719px)";
+
 /** Path (with base path) to a chart PNG. */
 export function chartPng(kind: string, subject: string, hour: Date): string {
   return `${BASE_PATH}/c/${kind}/${slug(subject)}/${hourKey(hour)}.png`;
