@@ -18,7 +18,7 @@ export function CopyImage({ src }: { src: string }) {
     }
   }
   return (
-    <button type="button" onClick={copy}>
+    <button type="button" onClick={copy} data-state={state} aria-live="polite">
       {state === "copied" ? "copied" : state === "failed" ? "copy failed: open the png" : "copy image"}
     </button>
   );

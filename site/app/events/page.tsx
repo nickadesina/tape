@@ -41,7 +41,7 @@ export default async function Events() {
   return (
     <>
       <h1>Events</h1>
-      <p>
+      <p className="lede">
         Every alert that fired, newest first. Thresholds are on the <Link href="/method">method</Link> page.
       </p>
       <div className="scroll">
@@ -76,7 +76,7 @@ export default async function Events() {
           </tbody>
         </table>
       </div>
-      {rows.length === 0 && <p className="dim">No events yet.</p>}
+      {rows.length === 0 && <p className="note">No events yet. Alerts appear here once the first one fires.</p>}
     </>
   );
 }

@@ -50,10 +50,13 @@ export default async function Permalink(props: PageProps<"/p/[kind]/[subject]/[h
   const market = r.kind === "card" || r.kind === "market" ? r.subject.split("@")[0] : null;
   return (
     <>
-      <h1>{title(r.kind, r.subject)}</h1>
-      <p className="dim">
-        Pinned to {utc(r.hour)} ({et(r.hour)}). This URL always shows this hour.
+      <p className="status">
+        <span>pinned</span>
+        <span>{utc(r.hour)}</span>
+        <span>{et(r.hour)}</span>
       </p>
+      <h1>{title(r.kind, r.subject)}</h1>
+      <p className="lede">This URL always shows this hour.</p>
       <Chart
         kind={r.kind}
         subject={r.subject}
@@ -64,7 +67,7 @@ export default async function Permalink(props: PageProps<"/p/[kind]/[subject]/[h
         priority
       />
       <p>
-        {market ? <Link href={`/m/${slug(market)}`}>{market} now</Link> : <Link href="/">now</Link>}
+        {market ? <Link href={`/m/${slug(market)}`}>{market} now →</Link> : <Link href="/">The tape now →</Link>}
       </p>
     </>
   );

@@ -24,7 +24,7 @@ differs from the doc.
 | `tape/compute.py` | Every published number for one hour. Pure. |
 | `tape/cohorts.py`, `tape/events.py` | Cohort rules, bot detection (FIFO median hold) and event rules. Pure. |
 | `tape/metrics.py` | The metrics job: cohorts, series, top positions, events and daily rows. |
-| `tape/render.py`, `tape/charts.py` | matplotlib charts (default look, Excel palette) and what feeds them. |
+| `tape/render.py`, `tape/charts.py` | matplotlib charts (the site's ink ground, palette and faces; see DESIGN.md) and what feeds them. |
 | `tape/daily.py`, `tape/alerts.py`, `tape/telegram.py` | The 16:00 ET job, event alerts, and Telegram. |
 | `tape/match.py` | Maps a post's text to markets, so twitter-checker can attach the Tape chart. |
 | `tape/migrations/` | Schema. |

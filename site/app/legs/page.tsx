@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { Chart, Stale } from "../../components/Chart";
-import { MarketTable } from "../../components/Tables";
+import { Chart, Status } from "../../components/Chart";
+import { H2, MarketTable } from "../../components/Tables";
 import { chartHour, latestHour, legs, markets, seriesAt } from "../../lib/queries";
 import { chartPng } from "../../lib/urls";
 
@@ -22,13 +22,13 @@ export default async function Legs() {
   const latest = hour ? await seriesAt(hour) : {};
   return (
     <>
+      <Status hour={hour} />
       <h1>Whale net by leg</h1>
-      <Stale hour={hour} />
-      <p>Same scale on every panel. Leg values are open-interest-weighted sums of their markets.</p>
+      <p className="lede">Same scale on every panel. Leg values are open-interest-weighted sums of their markets.</p>
       {chartH && <Chart kind="legs" subject="all" hour={chartH} alt="Whale net by leg, small multiples" priority />}
       {legList.map((l) => (
         <section key={l.key}>
-          <h2 id={l.key}>{l.label}</h2>
+          <H2 id={l.key}>{l.label}</H2>
           <MarketTable
             rows={marketList.filter((m) => m.leg === l.key).map((m) => ({ ...m, s: latest[m.coin] ?? {} }))}
           />

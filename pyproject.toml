@@ -26,7 +26,7 @@ build-backend = "setuptools.build_meta"
 include = ["tape*"]
 
 [tool.setuptools.package-data]
-tape = ["migrations/*.sql"]
+tape = ["migrations/*.sql", "fonts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

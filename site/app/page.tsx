@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Chart, Stale } from "../components/Chart";
-import { Cls, MarketTable } from "../components/Tables";
-import { pct, usd, utc } from "../lib/format";
+import { Chart, Status } from "../components/Chart";
+import { Cls, H2, MarketTable, Net } from "../components/Tables";
+import { pct, usd } from "../lib/format";
 import { chartHour, lastSweep, latestHour, legs, markets, seriesAt } from "../lib/queries";
 import { chartPng, slug } from "../lib/urls";
 
@@ -36,25 +36,32 @@ export default async function Home() {
 
   return (
     <>
+      <Status hour={hour}>
+        {sweep?.finished_at && <span>sweep of {sweep.addresses ?? 0} address-dex pairs</span>}
+      </Status>
       <h1>Who is positioned which way in the AI complex on Hyperliquid</h1>
-      <Stale hour={hour} />
       {hour && (
-        <p>
-          Complex whale net <b>{pct(cx.whale_net?.value)}</b> of open interest, 24h <Cls x={cx.whale_net_change?.value} />
-          . Coverage {pct(cx.coverage?.value, 1, false)}. As of {utc(hour)}
-          {sweep?.finished_at ? `, sweep of ${sweep.addresses ?? 0} address-dex pairs.` : "."}
+        <p className="lede">
+          Complex whale net <b>{pct(cx.whale_net?.value)}</b> of open interest, 24h{" "}
+          <b>
+            <Cls x={cx.whale_net_change?.value} />
+          </b>
+          . Coverage <b>{pct(cx.coverage?.value, 1, false)}</b>.
           {mover?.s.whale_net_change?.value != null && (
             <>
               {" "}
               Biggest mover: <Link href={`/m/${slug(mover.coin)}`}>{mover.coin}</Link>{" "}
-              <Cls x={mover.s.whale_net_change.value} />.
+              <b>
+                <Cls x={mover.s.whale_net_change.value} />
+              </b>
+              .
             </>
           )}
         </p>
       )}
       {chartH && <Chart kind="home" subject="complex" hour={chartH} alt="Whale net positioning, AI complex" priority />}
 
-      <h2>Legs</h2>
+      <H2 ja="部門">Legs</H2>
       <div className="scroll">
         <table>
           <thead>
@@ -62,10 +69,10 @@ export default async function Home() {
               <th>leg</th>
               <th className="n">whale net</th>
               <th className="n">24h</th>
+              <th className="n">coverage</th>
               <th className="n">fresh</th>
               <th className="n">crowding</th>
               <th className="n">OI</th>
-              <th className="n">coverage</th>
             </tr>
           </thead>
           <tbody>
@@ -76,14 +83,16 @@ export default async function Home() {
                   <td>
                     <Link href={`/legs#${l.key}`}>{l.label}</Link>
                   </td>
-                  <td className="n">{pct(s.whale_net?.value)}</td>
+                  <td className="n">
+                    <Net x={s.whale_net?.value} />
+                  </td>
                   <td className="n">
                     <Cls x={s.whale_net_change?.value} />
                   </td>
+                  <td className="n">{pct(s.coverage?.value, 1, false)}</td>
                   <td className="n">{pct(s.fresh_share?.value, 1, false)}</td>
                   <td className="n">{pct(s.crowding?.value, 1, false)}</td>
                   <td className="n">{usd(s.oi_usd?.value)}</td>
-                  <td className="n">{pct(s.coverage?.value, 1, false)}</td>
                 </tr>
               );
             })}
@@ -91,7 +100,7 @@ export default async function Home() {
         </table>
       </div>
 
-      <h2>Markets, by 24h move</h2>
+      <H2 ja="銘柄">Markets, by 24h move</H2>
       <MarketTable rows={marketRows} />
     </>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { utc } from "../lib/format";
+import type { ReactNode } from "react";
+import { et, utc } from "../lib/format";
 import { chartPage, chartPng } from "../lib/urls";
 import { CopyImage } from "./CopyImage";
 
@@ -25,23 +26,45 @@ export function Chart({
   return (
     <figure>
       {/* Plain img: the PNG is already the final pixels, rendered by the same code as the posts. */}
-      <img src={src} alt={alt} width={width} height={height} fetchPriority={priority ? "high" : "auto"} />
+      <a href={src} aria-label={`${alt}, full-size PNG`}>
+        <img src={src} alt={alt} width={width} height={height} fetchPriority={priority ? "high" : "auto"} />
+      </a>
       <figcaption>
         <Link href={chartPage(kind, subject, hour)}>permalink {utc(hour)}</Link>
         <a href={src}>png</a>
+        <span className="grow" />
         <CopyImage src={src} />
       </figcaption>
     </figure>
   );
 }
 
-export function Stale({ hour }: { hour: Date | null }) {
-  if (!hour) return <p className="notice">No data yet: the indexer has not finished its first sweep.</p>;
+/**
+ * The line above every title: the hour the page shows. When the indexer is
+ * behind, or has nothing yet, it becomes the warning band instead.
+ */
+export function Status({ hour, children }: { hour: Date | null; children?: ReactNode }) {
+  if (!hour)
+    return (
+      <p className="notice" role="status">
+        <b lang="ja">注意</b> No data yet: the indexer has not finished its first sweep.
+      </p>
+    );
   const behind = Date.now() - hour.getTime();
-  if (behind < 2 * 3_600_000) return null;
+  if (behind >= 2 * 3_600_000)
+    return (
+      <p className="notice" role="status">
+        <b lang="ja">注意</b>
+        <span>
+          The indexer is behind. Showing the last good hour, {utc(hour)} ({Math.floor(behind / 3_600_000)}h ago).
+        </span>
+      </p>
+    );
   return (
-    <p className="notice">
-      The indexer is behind. Showing the last good hour, {utc(hour)} ({Math.floor(behind / 3_600_000)}h ago).
+    <p className="status">
+      <span className="ok">{utc(hour)}</span>
+      <span>{et(hour)}</span>
+      {children}
     </p>
   );
 }

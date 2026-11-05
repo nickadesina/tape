@@ -1,10 +1,11 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { age, bps, pct, shortAddr, usd, utc } from "../lib/format";
 import { chartHour, events, latestHour, market, seriesAt, topPositions } from "../lib/queries";
 import { EXPLORER, chartPng, slug, unslug } from "../lib/urls";
-import { Chart, Stale } from "./Chart";
-import { Cls } from "./Tables";
+import { Chart, Status } from "./Chart";
+import { Cls, H2 } from "./Tables";
 
 export const WINDOWS = ["7d", "30d", "90d"] as const;
 
@@ -36,31 +37,64 @@ export async function MarketView({ slugParam, window }: { slugParam: string; win
   const v = (k: string) => x[k]?.value ?? null;
   const now = hour ?? new Date();
 
+  const oi = v("oi_usd");
+  const spec: [string, ReactNode][] = [
+    ["mid", pct(v("mid_net"))],
+    ["small", pct(v("small_net"))],
+    ["bots", pct(v("bot_net"))],
+    ["fresh", pct(v("fresh_share"), 1, false)],
+    ["crowding", pct(v("crowding"), 1, false)],
+    [
+      "funding / h",
+      <>
+        {pct(v("funding"), 4)} <small>{pct(v("funding_ann"), 0)} ann.</small>
+      </>,
+    ],
+    ["premium", bps(v("premium_bps"))],
+    ["liquidated, last hour", <>{pct(v("liq_share"), 2, false)} <small>of OI</small></>],
+    ["open interest", usd(oi)],
+    ["coverage", pct(v("coverage"), 1, false)],
+  ];
+
   return (
     <>
-      <h1>
-        {coin} <span className="dim">· {m.label} · max {m.max_leverage}x</span>
-      </h1>
-      <Stale hour={hour} />
-      <p>
-        Whale net <b>{pct(v("whale_net"))}</b> of OI, 24h <Cls x={v("whale_net_change")} />. Mid {pct(v("mid_net"))},
-        small {pct(v("small_net"))}, bots {pct(v("bot_net"))}. Fresh {pct(v("fresh_share"), 1, false)}, crowding{" "}
-        {pct(v("crowding"), 1, false)}. Funding {pct(v("funding"), 4)}/h ({pct(v("funding_ann"), 0)} ann.), premium{" "}
-        {bps(v("premium_bps"))}, liquidated {pct(v("liq_share"), 2, false)} of OI last hour. OI {usd(v("oi_usd"))},
-        coverage {pct(v("coverage"), 1, false)}.
+      <Status hour={hour} />
+      <h1>{coin}</h1>
+      <p className="sub">
+        {m.label} · max {m.max_leverage}x
       </p>
+      <p className="lede">
+        Whale net <b>{pct(v("whale_net"))}</b> of OI, 24h{" "}
+        <b>
+          <Cls x={v("whale_net_change")} />
+        </b>
+        .
+      </p>
+      <dl className="spec">
+        {spec.map(([k, val]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{val}</dd>
+          </div>
+        ))}
+      </dl>
       {cardH && <Chart kind="card" subject={coin} hour={cardH} alt={`${coin} net positioning by cohort, 7 days`} />}
-      <p>
-        {WINDOWS.map((w) =>
-          w === window ? (
-            <b key={w}>[{w}] </b>
-          ) : (
-            <Link key={w} href={w === "30d" ? `/m/${slug(coin)}` : `/m/${slug(coin)}/${w}`}>
-              [{w}]{" "}
-            </Link>
-          ),
-        )}
-      </p>
+      <div className="seg-row">
+        <span id="window-label">All metrics, window</span>
+        <nav className="seg" aria-labelledby="window-label">
+          {WINDOWS.map((w) =>
+            w === window ? (
+              <span key={w} aria-current="page">
+                {w}
+              </span>
+            ) : (
+              <Link key={w} href={w === "30d" ? `/m/${slug(coin)}` : `/m/${slug(coin)}/${w}`}>
+                {w}
+              </Link>
+            ),
+          )}
+        </nav>
+      </div>
       {panelH && (
         <Chart
           kind="market"
@@ -72,7 +106,8 @@ export async function MarketView({ slugParam, window }: { slugParam: string; win
         />
       )}
 
-      <h2>Top {tops.length} addresses {hour ? `at ${utc(hour)}` : ""}</h2>
+      <H2 ja="上位">Top {tops.length} addresses</H2>
+      {hour && <p className="note">Positions at {utc(hour)}.</p>}
       <div className="scroll">
         <table>
           <thead>
@@ -97,7 +132,7 @@ export async function MarketView({ slugParam, window }: { slugParam: string; win
                 </td>
                 <td className={t.size > 0 ? "pos" : "neg"}>{t.size > 0 ? "long" : "short"}</td>
                 <td className="n">{usd(t.notional)}</td>
-                <td className="n">{pct(v("oi_usd") ? t.notional / (v("oi_usd") as number) : null, 1, false)}</td>
+                <td className="n">{pct(oi ? t.notional / oi : null, 1, false)}</td>
                 <td>
                   {t.cohort}
                   {t.fresh ? " · fresh" : ""}
@@ -108,22 +143,28 @@ export async function MarketView({ slugParam, window }: { slugParam: string; win
           </tbody>
         </table>
       </div>
-      <p className="dim">
+      <p className="note">
         Held: hours since the position last changed sign, from hourly snapshots; positions open before the tape started
         count from its first sweep.
       </p>
 
       {evs.length > 0 && (
         <>
-          <h2>Recent events</h2>
-          <ul>
-            {evs.map((e) => (
-              <li key={e.id}>
-                {utc(e.time)} {e.kind} {e.size_usd ? usd(e.size_usd) : ""}{" "}
-                {e.post_url && <a href={e.post_url}>post</a>}
-              </li>
-            ))}
-          </ul>
+          <H2 ja="速報">Recent events</H2>
+          <div className="scroll">
+            <table>
+              <tbody>
+                {evs.map((e) => (
+                  <tr key={e.id}>
+                    <td>{utc(e.time)}</td>
+                    <td>{e.kind.replace(/_/g, " ")}</td>
+                    <td className="n">{e.size_usd ? usd(e.size_usd) : ""}</td>
+                    <td>{e.post_url && <a href={e.post_url}>post</a>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </>

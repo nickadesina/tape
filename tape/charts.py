@@ -18,7 +18,8 @@ from datetime import datetime, timedelta
 from .compute import COMPLEX, leg_subject
 from .events import describe
 from .render import (
-    EXCEL,
+    HEAVY,
+    PALETTE,
     Bar,
     Callout,
     ChartSize,
@@ -36,8 +37,6 @@ from .store import ChartStore
 from .timeutil import ET, hour_key
 
 log = logging.getLogger("tape.charts")
-
-HEAVY_COLOR = "#000000"
 
 WINDOWS = (7, 30, 90)
 MARKET_PANELS = (
@@ -71,7 +70,7 @@ def legs_in_order(conn) -> list[tuple[str, str]]:
 
 
 def footer(s: Settings, hour: datetime, note: str | None = None) -> Footer:
-    return Footer(handle=s.t("handle"), date_text=hour.astimezone(ET).strftime("%Y-%m-%d"), note=note)
+    return Footer(handle=s.t("handle"), date_text=hour.astimezone(ET).strftime("%Y-%m-%d ET"), note=note)
 
 
 def last_value(points) -> float | None:
@@ -96,7 +95,7 @@ def home_chart(conn, s: Settings, hour: datetime) -> tuple[bytes, dict]:
     legs = legs_in_order(conn)
     subjects = [COMPLEX] + [leg_subject(k) for k, _ in legs]
     data = load_series(conn, subjects, ["whale_net", "whale_net_change"], hour - timedelta(days=days), hour)
-    lines = [Line("AI complex", data[(COMPLEX, "whale_net")], HEAVY_COLOR, heavy=True)]
+    lines = [Line("AI complex", data[(COMPLEX, "whale_net")], HEAVY, heavy=True)]
     bars = []
     changes: dict[str, float] = {}
     low_cov: list[str] = []
@@ -104,7 +103,7 @@ def home_chart(conn, s: Settings, hour: datetime) -> tuple[bytes, dict]:
         pts = data[(leg_subject(k), "whale_net")]
         if not pts:
             continue
-        color = EXCEL[i % len(EXCEL)]
+        color = PALETTE[i % len(PALETTE)]
         cov = last_coverage(pts)
         disp = label if cov is None or cov >= thr else f"{label} (cov {cov * 100:.0f}%)"
         if cov is not None and cov < thr:
@@ -118,7 +117,7 @@ def home_chart(conn, s: Settings, hour: datetime) -> tuple[bytes, dict]:
     mover = None
     if changes:
         mover = max(changes, key=lambda k: abs(changes[k]))
-        callout = Callout(mover, f"{mover.split(' (cov')[0]} {changes[mover] * 100:+.1f}pp")
+        callout = Callout(mover, f"{mover.split(' (cov')[0]} {changes[mover] * 100:+.1f}pp", changes[mover])
     cx_cov = last_coverage(data[(COMPLEX, "whale_net")])
     note = None
     if low_cov:
@@ -151,7 +150,7 @@ def legs_chart(conn, s: Settings, hour: datetime) -> bytes:
     legs = legs_in_order(conn)
     data = load_series(conn, [leg_subject(k) for k, _ in legs], ["whale_net"], hour - timedelta(days=days), hour)
     panels = [
-        (label, Line(label, data[(leg_subject(k), "whale_net")], EXCEL[i % len(EXCEL)]))
+        (label, Line(label, data[(leg_subject(k), "whale_net")], PALETTE[i % len(PALETTE)]))
         for i, (k, label) in enumerate(legs)
     ]
     return render_grid(
@@ -169,10 +168,10 @@ def market_chart(conn, s: Settings, coin: str, hour: datetime, days: int) -> byt
     data = load_series(conn, [coin], metrics, hour - timedelta(days=days), hour)
     panels = []
     for m, title, fmt in MARKET_PANELS:
-        lines = [Line("whales" if m == "whale_net" else title, data[(coin, m)], EXCEL[0])]
+        lines = [Line("whales" if m == "whale_net" else title, data[(coin, m)], HEAVY)]
         if m == "whale_net":
-            lines.append(Line("mid", data[(coin, "mid_net")], EXCEL[1]))
-            lines.append(Line("small", data[(coin, "small_net")], EXCEL[2]))
+            lines.append(Line("mid", data[(coin, "mid_net")], PALETTE[0]))
+            lines.append(Line("small", data[(coin, "small_net")], PALETTE[1]))
         panels.append(Panel(title, lines, fmt))
     cov = last_coverage(data[(coin, "whale_net")])
     cov_txt = "no data" if cov is None else f"coverage {cov * 100:.1f}%"
@@ -192,12 +191,12 @@ def card_chart(conn, s: Settings, coin: str, hour: datetime, marker: Marker | No
         conn, [coin], ["whale_net", "mid_net", "small_net", "whale_net_change"], hour - timedelta(days=days), hour
     )
     lines = [
-        Line("whales", data[(coin, "whale_net")], HEAVY_COLOR, heavy=True),
-        Line("mid", data[(coin, "mid_net")], EXCEL[0]),
-        Line("small", data[(coin, "small_net")], EXCEL[1]),
+        Line("whales", data[(coin, "whale_net")], HEAVY, heavy=True),
+        Line("mid", data[(coin, "mid_net")], PALETTE[0]),
+        Line("small", data[(coin, "small_net")], PALETTE[1]),
     ]
     ch = last_value(data[(coin, "whale_net_change")])
-    callout = Callout("whales", f"{ch * 100:+.1f}pp 24h") if ch is not None and marker is None else None
+    callout = Callout("whales", f"{ch * 100:+.1f}pp 24h", ch) if ch is not None and marker is None else None
     cov = last_coverage(data[(coin, "whale_net")])
     note = None if cov is None or cov >= thr else f"coverage {cov * 100:.1f}%: dashed under 98%"
     return render_card(

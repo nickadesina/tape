@@ -1,3 +1,4 @@
+import { H2 } from "../../components/Tables";
 import { CHANGELOG } from "../../lib/changelog";
 import { metricNames, subjectNames } from "../../lib/queries";
 import { BASE_PATH, HANDLE } from "../../lib/urls";
@@ -11,12 +12,12 @@ export default async function Data() {
   return (
     <>
       <h1>Data</h1>
-      <p>
+      <p className="lede">
         Every series behind the charts, updated hourly. Licensed{" "}
         <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Attribution string: <b>{HANDLE}</b>.
       </p>
 
-      <h2>Hourly series</h2>
+      <H2 ja="資料">Hourly series</H2>
       <pre>
         {`${b}/data/series.csv?subject=complex&metric=whale_net&from=2026-10-01&to=2026-10-31
 ${b}/api/series?subject=xyz:CRWV,leg:neoclouds&metric=whale_net,coverage&from=2026-10-01`}
@@ -29,23 +30,23 @@ ${b}/api/series?subject=xyz:CRWV,leg:neoclouds&metric=whale_net,coverage&from=20
       <p>Subjects: {subjects.join(", ") || "none yet"}.</p>
       <p>Metrics: {metrics.join(", ") || "none yet"}. Definitions are on the method page.</p>
 
-      <h2>Daily series</h2>
+      <H2>Daily series</H2>
       <pre>{`${b}/data/daily.csv?from=2026-10-01\n${b}/api/daily?subject=complex`}</pre>
       <p>One row per ET day from the daily snapshot hour, only for subjects whose coverage cleared the posting bar.</p>
 
-      <h2>Events</h2>
+      <H2>Events</H2>
       <pre>{`${b}/data/events.csv\n${b}/api/events`}</pre>
 
-      <h2>Latest</h2>
+      <H2>Latest</H2>
       <pre>{`${b}/api/latest`}</pre>
 
-      <h2>Charts</h2>
+      <H2>Charts</H2>
       <p>
         Every chart is a PNG at a URL that pins its hour, e.g. <code>{b}/c/home/complex/2026-10-31T19Z.png</code>, and{" "}
         <code>latest.png</code> in place of the hour redirects to the newest one.
       </p>
 
-      <h2>Changelog</h2>
+      <H2>Changelog</H2>
       <ul>
         {CHANGELOG.map((c) => (
           <li key={c.date + c.change.slice(0, 20)}>

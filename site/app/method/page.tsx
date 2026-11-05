@@ -1,3 +1,4 @@
+import { H2 } from "../../components/Tables";
 import { definitions } from "../../lib/queries";
 import { HANDLE } from "../../lib/urls";
 
@@ -24,13 +25,13 @@ export default async function Method() {
   return (
     <>
       <h1>Method</h1>
-      <p>
+      <p className="lede">
         Every number on this site is computed from public Hyperliquid chain state and can be reproduced without asking
         anyone. The values below are the ones the last hourly run used; they come from the same configuration the
         indexer reads.
       </p>
 
-      <h2>Where positions come from</h2>
+      <H2>Where positions come from</H2>
       <p>
         The indexer subscribes to the public <code>trades</code> WebSocket channel for every market in the universe.
         Every fill names both counterparties, which is how addresses are discovered. Each discovered address is then
@@ -41,7 +42,7 @@ export default async function Method() {
         Hyperliquid leaderboard are snapshotted once at start so that positions opened before the tape started are seen.
       </p>
 
-      <h2>Universe</h2>
+      <H2>Universe</H2>
       <p>
         The AI complex is every Hyperliquid perp whose price is a bet on AI capex, grouped into legs. The list is checked
         against live market metadata on every start; delisted markets drop out. Native crypto perps are excluded.
@@ -57,7 +58,7 @@ export default async function Method() {
         })}
       </ul>
 
-      <h2>Cohorts</h2>
+      <H2>Cohorts</H2>
       <ul>
         <li>
           Whales: the top {c.whale_count ?? "?"} addresses by gross notional across the complex, bots excluded,
@@ -77,9 +78,10 @@ export default async function Method() {
         </li>
       </ul>
 
-      <h2>Series</h2>
+      <H2>Series</H2>
       <p>Computed hourly per market and rolled up per leg and for the whole complex. Notional is size times mark.</p>
-      <table>
+      <div className="scroll">
+      <table className="defs">
         <tbody>
           <tr><td>whale_net</td><td>(whale longs − whale shorts) / open interest, signed</td></tr>
           <tr><td>whale_net_change</td><td>whale_net now minus 24 hours earlier</td></tr>
@@ -94,6 +96,7 @@ export default async function Method() {
           <tr><td>oi_usd, mark</td><td>open interest in USD; mark price</td></tr>
         </tbody>
       </table>
+      </div>
       <p>
         Open interest is one side of the book. Gross notional counts both sides of an address, so fresh share and
         crowding can exceed 100% in principle. Leg and complex values are open-interest-weighted: numerators and
@@ -101,7 +104,7 @@ export default async function Method() {
         they are, a spread.
       </p>
 
-      <h2>Reconciliation and coverage</h2>
+      <H2>Reconciliation and coverage</H2>
       <p>
         Longs equal shorts on every perp, so aggregate positioning means nothing until it is cut by cohort, and every cut
         has to sum back. Each hour the sum of every long position the tape knows on a market is compared with the
@@ -111,7 +114,7 @@ export default async function Method() {
         day beats a wrong chart. Daily rows in the data are written only for subjects over the bar.
       </p>
 
-      <h2>Events</h2>
+      <H2>Events</H2>
       <ul>
         <li>Whale flip: a whale goes from net long to net short (or back) on a market with over {usd(e.whale_flip_min_usd)} on the new side.</li>
         <li>Whale entry: an address outside the whale set opens over {usd(e.whale_entry_min_usd)} on one market.</li>
@@ -125,14 +128,14 @@ export default async function Method() {
         liquidation.
       </p>
 
-      <h2>What the tape cannot see</h2>
+      <H2>What the tape cannot see</H2>
       <p>
         Anything not on Hyperliquid: listed equities and options, private credit, OTC and swap books, other venues&apos;
         perps. Positions held through vaults or sub-accounts show under that vault or sub-account. Addresses are
         addresses: one person can hold many, and one address can be a fund. The tape never names a person.
       </p>
 
-      <h2>Licence</h2>
+      <H2>Licence</H2>
       <p>Charts and data are CC BY 4.0. Attribution: {HANDLE}.</p>
     </>
   );
