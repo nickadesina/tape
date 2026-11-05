@@ -225,7 +225,7 @@ def _date_axis(ax, span_days: float, xlim: tuple[datetime, datetime] | None = No
     if xlim:
         ax.set_xlim(*xlim)
         span_days = (xlim[1] - xlim[0]).total_seconds() / 86400
-    ax.xaxis.set_major_locator(AutoDateLocator(minticks=min(3, maxticks - 1), maxticks=maxticks))
+    ax.xaxis.set_major_locator(AutoDateLocator(minticks=3, maxticks=maxticks))
     ax.xaxis.set_major_formatter(DateFormatter("%b %d" if span_days > 2 else "%H:%M"))
 
 
@@ -436,7 +436,7 @@ def render_grid(
         if i < len(panels) and i + cols >= len(panels):
             ax.xaxis.set_tick_params(labelbottom=True)
     all_x = [pt[0] for _, ln in panels for pt in ln.points]
-    _date_axis(axes.flat[0], span, _clip(xlim, all_x), maxticks=3 if phone else 4)
+    _date_axis(axes.flat[0], span, _clip(xlim, all_x), maxticks=4)
     _footer(fig, footer, size)
     return _png(fig)
 
