@@ -3,10 +3,9 @@ scenarios, the ledger, the indicator bench and the loaders' parsers. Pure."""
 
 from datetime import UTC, date, datetime
 
-import httpx
 import pytest
 
-from tape.loaders import edgar, korea, sfcompute, taiwan
+from tape.loaders import edgar, korea, ornn, taiwan
 from tape.model import conversions, gaps, indicators, ledger
 from tape.model.core import Quantity, Range, Series, change, evaluate, load_stack, revision
 from tape.model.scenarios import load_scenarios, propagate
@@ -370,46 +369,52 @@ def test_korea_parse_sums_matching_hs_codes():
         korea.parse("<r><item><foo>1</foo></item></r>", ["8542"])
 
 
-WINDOWS = {
-    "object": "list", "has_more": False,
-    "data": [
-        {"instance_sku": "sku_a", "start_at": 1777507200, "end_at": 1778112000, "duration_hours": 168,
-         "total_bid_order_count": 3, "total_ask_order_count": 5,
-         "best_bid": {"dollars_per_node_hour": "17.380000",
-                      "allocation_schedule_delta": [{"start_at": 1777507200, "end_at": 1778112000, "node_count": 4},
-                                                    {"start_at": 1778112000, "end_at": None, "node_count": 0}]},
-         "best_ask": {"dollars_per_node_hour": "17.420000",
-                      "allocation_schedule_delta": [{"start_at": 1777507200, "end_at": 1778112000, "node_count": 2}]}},
-        {"instance_sku": "sku_b", "start_at": 1777593600, "end_at": 1778198400, "duration_hours": 168,
-         "total_bid_order_count": 0, "total_ask_order_count": 1,
-         "best_ask": {"dollars_per_node_hour": "16.950000",
-                      "allocation_schedule_delta": [{"start_at": 1777593600, "end_at": 1778198400, "node_count": 8}]}},
-    ],
-}  # fmt: skip
+def test_ornn_parse_dates_by_eastern_day_and_marks_everything_private():
+    body = {"success": True, "gpu_type": "H100 SXM", "access": "public-3mo", "data": [
+        {"timestamp": "2026-11-01T04:00:00.000Z", "index_value": 3.02},
+        {"timestamp": "2026-11-02T05:00:00.000Z", "index_value": 3.38},
+    ]}  # fmt: skip
+    src = ornn.ornn_source("https://data.ornn.com/")
+    qs = ornn.parse("h100", body, src)
+    assert [(q.key, q.period_end, q.value.mid) for q in qs] == [
+        ("h100.rent_index", date(2026, 11, 1), 3.02),
+        ("h100.rent_index", date(2026, 11, 2), 3.38),
+    ]
+    assert all(q.private and q.source == "ornn_ocpi" for q in qs) and src.internal
+    with pytest.raises(ValueError):
+        ornn.parse("h100", {"success": False, "error": "nope"}, src)
 
 
-def test_sfcompute_windows_become_per_gpu_quotes():
-    now = datetime(2026, 4, 29, 1, 2, 3, tzinfo=UTC)
-    rows = sfcompute.parse_windows("h100", WINDOWS["data"], now, 8)
-    a, b = rows
-    assert a[0] == datetime(2026, 4, 29, 1, 2, tzinfo=UTC)
-    assert a[6:] == (pytest.approx(17.38 / 8), pytest.approx(17.42 / 8), 4, 2, 3, 5)
-    assert b[6] is None and b[7] == pytest.approx(16.95 / 8) and b[9] == 8
+def test_ornn_rent_range_is_the_trailing_low_and_high_around_the_day():
+    series = Series(
+        Quantity("h100.rent_index", "usd_per_gpu_hour", d, d, Range.point(v), "reported", "ornn", "ornn_ocpi", private=True)
+        for d, v in [(date(2026, 10, 20), 9.0), (date(2026, 11, 1), 3.0), (date(2026, 11, 3), 3.5), (date(2026, 11, 4), 3.2)]
+    )  # fmt: skip
+    [r] = ornn.rent_ranges(series, ["h100", "b200"], date(2026, 11, 4), 7, "ornn_ocpi")
+    assert r.key == "h100.rent_traded" and r.value.as_list() == [3.0, 3.2, 3.5]  # Oct 20 is outside the week
+    assert r.private
 
 
-def test_sfcompute_client_pages_and_sends_the_token():
-    seen = []
-
-    def handler(req: httpx.Request) -> httpx.Response:
-        seen.append(req)
-        if "starting_after" not in req.url.params:
-            return httpx.Response(200, json={"data": [1], "has_more": True, "cursor": "c1"})
-        return httpx.Response(200, json={"data": [2], "has_more": False})
-
-    http = httpx.Client(transport=httpx.MockTransport(handler), headers={"authorization": "Bearer t"})
-    assert sfcompute.Client("t", http).pages("windows", {"requirements": "accelerator:h100"}) == [1, 2]
-    assert seen[0].url.path == "/preview/v2/orderbook/windows"
-    assert seen[0].headers["authorization"] == "Bearer t" and seen[1].url.params["starting_after"] == "c1"
+def test_privacy_carries_from_an_internal_source_through_estimates():
+    src = {
+        "sources": {
+            "rel": {"url": "https://example.com/release"},
+            "lic": {"url": "https://example.com/l", "internal": True},
+        }
+    }
+    st = load_stack(
+        ENTITIES, src,
+        {"quantities": [qty("coreweave.active_power", 1500), qty("h100.rent", 3.0, source="lic")],
+         "estimates": [{"key": "coreweave.x", "unit": "x", "method": "product",
+                        "inputs": ["coreweave.active_power", "h100.rent"]},
+                       {"key": "coreweave.y", "unit": "x", "method": "product",
+                        "inputs": ["coreweave.active_power", "coreweave.active_power"]}]},
+    )  # fmt: skip
+    by = {q.key: q for q in st.quantities}
+    assert by["h100.rent"].private and not by["coreweave.active_power"].private
+    out, _ = evaluate(Series(st.quantities), st.estimates)
+    est = {q.key: q for q in out}
+    assert est["coreweave.x"].private and not est["coreweave.y"].private
 
 
 # ---- the stress test's monthly cadence ---------------------------------------

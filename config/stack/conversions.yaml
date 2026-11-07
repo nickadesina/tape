@@ -18,7 +18,8 @@
 comparisons:
   - node: coreweave.rent_util
     entity: coreweave
-    label: "CoreWeave: rent x utilization its valuation implies, against traded H100 rents"
+    label: "CoreWeave: rent x utilization its valuation implies, against H100 rents"
+    # h100.rent_traded comes from Ornn's index, so this gap is private.
     conversion: neocloud_rent
     market: {price: xyz:CRWV}
     inputs:

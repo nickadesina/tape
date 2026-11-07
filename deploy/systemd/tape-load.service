@@ -1,5 +1,5 @@
 [Unit]
-Description=Stack Engine loaders: SEC EDGAR, Taiwan monthly revenue, Korea trade statistics
+Description=Stack Engine loaders: SEC EDGAR, Taiwan monthly revenue, Korea trade statistics, Ornn GPU rents
 
 [Service]
 Type=oneshot

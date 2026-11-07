@@ -23,7 +23,7 @@
 #
 # Loaders add figures without passing through this file: EDGAR (filed: revenue,
 # capex, cash, debt, leases, backlog, share counts), Taiwan monthly revenue
-# (filed), Korea trade statistics, and SF Compute traded rents (reported).
+# (filed), Korea trade statistics, and Ornn's GPU rent index (reported, private).
 
 quantities:
   # Drafted 2026-11-05 from CoreWeave's Q2 2026 release: "Expanded active power

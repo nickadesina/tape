@@ -12,7 +12,7 @@ like config/graph.yaml:
                     estimates the model computes from other figures (`estimates`)
 
 A figure without `verified_at` is a draft: it is not loaded, and `tape stack`
-lists it. Loaders (EDGAR, Taiwan, Korea, SF Compute) add filed and reported
+lists it. Loaders (EDGAR, Taiwan, Korea, Ornn) add filed and reported
 figures straight from their source, and the model run computes the estimates.
 
 Rules for estimates (design doc, "Rules for estimates"):
@@ -141,6 +141,7 @@ class Source:
     title: str | None = None
     publisher: str | None = None
     published: date | None = None
+    internal: bool = False  # licensed for internal use only: nothing derived from it is published
 
 
 def source_id(url: str) -> str:
@@ -155,13 +156,16 @@ class Quantity:
     period_end: date
     value: Range
     kind: str
-    origin: str  # config | edgar | taiwan | korea | sfcompute | model
+    origin: str  # config | edgar | taiwan | korea | ornn | model
     source: str | None = None  # a sources id; None only for estimates
     method: str | None = None
     inputs: tuple[str, ...] = ()
     verified_at: date | None = None
     revision_reason: str | None = None
     note: str | None = None
+    # From an internal-only source, or computed from such a figure. Private
+    # figures feed the model and the operator's alerts, never the site.
+    private: bool = False
 
     @property
     def entity(self) -> str:
@@ -177,6 +181,7 @@ class Quantity:
             self.unit == o.unit
             and self.kind == o.kind
             and self.source == o.source
+            and self.private == o.private
             and all(
                 math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12)
                 for a, b in zip(self.value.as_list(), o.value.as_list(), strict=True)
@@ -200,6 +205,7 @@ class EstimateSpec:
     basis: str | None = None  # judgment only: what the range rests on
     source: str | None = None  # judgment only
     note: str | None = None
+    private: bool = False  # judgment only: its source is internal-only
 
 
 @dataclass
@@ -289,6 +295,7 @@ def load_stack(
             x.get("title"),
             x.get("publisher"),
             _date(x["published"], sid) if x.get("published") else None,
+            bool(x.get("internal")),
         )
 
     def cite(ref: Any, what: str) -> str:
@@ -336,6 +343,7 @@ def load_stack(
             revision_reason=q.get("revision_reason"),
             note=q.get("note"),
         )
+        qty = replace(qty, private=sources[qty.source].internal) if qty.source else qty
         if verified or drafts_as_verified:
             quantities.append(qty if verified else replace(qty, verified_at=date.today()))
         else:
@@ -379,7 +387,10 @@ def load_stack(
                 raise ValueError(f"{what}: {method} needs {need or 'at least one'} input(s)")
             if key in inputs:
                 raise ValueError(f"{what}: an estimate cannot be its own input")
-        estimates.append(EstimateSpec(key, str(x["unit"]), method, inputs, period, value, basis, src, x.get("note")))
+        private = bool(src and sources[src].internal)
+        estimates.append(
+            EstimateSpec(key, str(x["unit"]), method, inputs, period, value, basis, src, x.get("note"), private)
+        )
     _check_acyclic(estimates)
     return Stack(entities, sources, quantities, estimates, drafts, draft_estimates)
 
@@ -485,7 +496,7 @@ def evaluate(series: Series, specs: Sequence[EstimateSpec]) -> tuple[list[Quanti
             assert spec.period and spec.value
             q = Quantity(
                 spec.key, spec.unit, spec.period[0], spec.period[1], spec.value, "estimate", "model",
-                source=spec.source, method="judgment", note=spec.basis,
+                source=spec.source, method="judgment", note=spec.basis, private=spec.private,
             )  # fmt: skip
             series.add(q)
             out.append(q)
@@ -511,6 +522,7 @@ def evaluate(series: Series, specs: Sequence[EstimateSpec]) -> tuple[list[Quanti
             q = Quantity(
                 spec.key, spec.unit, start, end, v, "estimate", "model",
                 method=spec.method, inputs=spec.inputs, note=spec.note,
+                private=any(g.private for g in got if g),
             )  # fmt: skip
             series.add(q)
             out.append(q)

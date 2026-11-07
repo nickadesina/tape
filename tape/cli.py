@@ -325,15 +325,36 @@ def cmd_model(a) -> None:
     print(json.dumps(out, indent=2, default=str))
 
 
-LOADERS = ("edgar", "taiwan", "korea", "rents")
+def cmd_gaps(a) -> None:
+    """The latest gaps, private ones included: this is the operator's view."""
+    from .db import connect
+
+    with connect(_settings().env.database_url) as conn:
+        rows = conn.execute(
+            """select * from gaps where day = (select max(day) from gaps) order by flagged desc, abs(distance) desc"""
+        ).fetchall()
+    if not rows:
+        print("no gaps yet")
+    for r in rows:
+        tag = "PRIVATE, not for publication  " if r["private"] else ""
+        apart = "overlap" if r["overlap"] else f"{r['days_apart']} days apart"
+        print(
+            f"{r['day']}  {tag}{r['label']}\n  market {r['market_value']:,.4g} [{r['market_lo']:,.4g}-{r['market_hi']:,.4g}]"
+            f"  model {r['model_value']:,.4g} [{r['model_lo']:,.4g}-{r['model_hi']:,.4g}] {r['unit']}"
+            f"  distance {r['distance'] * 100:+.0f}%  {apart}"
+            f"{'  FLAGGED' if r['flagged'] else ''}"
+        )
+
+
+LOADERS = ("edgar", "taiwan", "korea", "ornn")
 
 
 def cmd_load(a) -> None:
-    from .loaders import edgar, korea, sfcompute, taiwan
+    from .loaders import edgar, korea, ornn, taiwan
 
-    mods = {"edgar": edgar, "taiwan": taiwan, "korea": korea, "rents": sfcompute}
+    mods = {"edgar": edgar, "taiwan": taiwan, "korea": korea, "ornn": ornn}
     s = _settings()
-    for name in a.which or ["edgar", "taiwan", "korea"]:
+    for name in a.which or list(LOADERS):
         try:
             out = mods[name].load(s)
         except Exception as e:  # one source down must not stop the others
@@ -399,7 +420,10 @@ def main(argv: list[str] | None = None) -> None:
     md.add_argument("--drafts", action="store_true", help="treat drafts as verified; stores nothing")
     md.add_argument("--dry-run", action="store_true", help="compute without storing")
     md.set_defaults(fn=cmd_model)
-    ld = sub.add_parser("load", help="run loaders: edgar, taiwan, korea (default: all three) or rents")
+    sub.add_parser("gaps", help="the latest gaps, private ones included (the operator's view)").set_defaults(
+        fn=cmd_gaps
+    )
+    ld = sub.add_parser("load", help="run loaders: edgar, taiwan, korea, ornn (default: all)")
     ld.add_argument("which", nargs="*", choices=LOADERS)
     ld.set_defaults(fn=cmd_load)
     a = p.parse_args(argv)

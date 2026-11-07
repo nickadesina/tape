@@ -5,7 +5,9 @@
   2. Version the verified config figures into `quantities` (a changed figure
      needs a new revision_reason), and flag stale ones.
   3. Read every current figure (config, EDGAR, Taiwan, Korea) plus the day's
-     traded rents (SF Compute), compute the estimates, version them.
+     the day's GPU rent range (Ornn's index, private), compute the estimates,
+     version them. A figure from an internal-only source, and anything
+     computed from one, is private: it reaches the operator, never the site.
   4. For each reviewed comparison: market price -> implied value, against the
      model; write `gaps`, flag the persistent ones, tell the operator.
   5. Run the scenarios; score the forecasts whose actual figure is in.
@@ -20,15 +22,15 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import statistics
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
 import yaml
 
 from .db import connect
 from .graph import Graph, load_graph_file
+from .loaders import ornn
 from .model import conversions as conv_mod
 from .model import gaps as gaps_mod
 from .model import ledger
@@ -53,6 +55,10 @@ log = logging.getLogger("tape.model")
 STACK_DIR = CONFIG_DIR / "stack"
 FILES = ("entities.yaml", "sources.yaml", "quantities.yaml", "conversions.yaml", "scenarios.yaml", "forecasts.yaml")
 MODEL_LOCK = 0x7A9E5701
+PRIVATE_NOTE = (
+    " PRIVATE: computed from a source licensed for internal use only (Ornn's index); not for publication"
+    " without that source's written consent."
+)
 
 
 # ---- config files ----------------------------------------------------------
@@ -199,12 +205,13 @@ def load_files(drafts: bool = False) -> Files:
 def put_sources(conn, sources: list[Source]) -> None:
     with conn.cursor() as cur:
         cur.executemany(
-            """insert into sources (id, url, title, publisher, published) values (%s, %s, %s, %s, %s)
+            """insert into sources (id, url, title, publisher, published, internal) values (%s, %s, %s, %s, %s, %s)
                on conflict (id) do update set url = excluded.url,
                  title = coalesce(excluded.title, sources.title),
                  publisher = coalesce(excluded.publisher, sources.publisher),
-                 published = coalesce(excluded.published, sources.published)""",
-            [(x.id, x.url, x.title, x.publisher, x.published) for x in sources],
+                 published = coalesce(excluded.published, sources.published),
+                 internal = excluded.internal""",
+            [(x.id, x.url, x.title, x.publisher, x.published, x.internal) for x in sources],
         )
 
 
@@ -291,7 +298,7 @@ def _row_to_q(r: dict) -> Quantity:
         key=r["key"], unit=r["unit"], period_start=r["period_start"], period_end=r["period_end"],
         value=Range(r["lo"], r["value"], r["hi"]), kind=r["kind"], origin=r["origin"], source=r["source"],
         method=r["method"], inputs=tuple(r["inputs"] or ()), verified_at=r["verified_at"],
-        revision_reason=r["revision_reason"], note=r["note"],
+        revision_reason=r["revision_reason"], note=r["note"], private=r["private"],
     )  # fmt: skip
 
 
@@ -325,12 +332,12 @@ def put_quantities(conn, qs: list[Quantity], today: date | None = None, stale_da
             version = old["version"] + 1
         conn.execute(
             """insert into quantities (key, entity, metric, unit, period_start, period_end, value, lo, hi, kind, method,
-                                       inputs, source, origin, version, revision_reason, verified_at, stale, note)
-               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                                       inputs, source, origin, version, revision_reason, verified_at, stale, note, private)
+               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 q.key, q.entity, q.metric, q.unit, q.period_start, q.period_end, q.value.mid, q.value.lo, q.value.hi,
                 q.kind, q.method, list(q.inputs), q.source, q.origin, version, reason, q.verified_at,
-                q.stale(today, stale_days), q.note,
+                q.stale(today, stale_days), q.note, q.private,
             ),
         )  # fmt: skip
         written += 1
@@ -361,50 +368,12 @@ def flag_stale(conn, today: date, stale_days: int) -> None:
 # ---- market inputs ---------------------------------------------------------
 
 
-def traded_rents(conn, s: Settings, day: date) -> list[Quantity]:
-    """<accelerator>.rent_traded for `day`: the median best bid, mid and ask
-    over the last `rent_window_days` of quotes, for delivery windows of at
-    least `min_window_hours` starting within `rent_start_within_days`: the
-    spot end of the curve. Dollars per GPU-hour."""
-    cfg = s.t("stack", "sfcompute")
-    end = datetime.combine(day + timedelta(days=1), datetime.min.time()).replace(tzinfo=utcnow().tzinfo)
-    rows = conn.execute(
-        """select accelerator, bid, ask from rent_quotes
-           where time > %s and time <= %s and hours >= %s and bid is not null and ask is not null
-             and start_at <= time + make_interval(days => %s)""",
-        (
-            end - timedelta(days=int(cfg["rent_window_days"])),
-            end,
-            float(cfg["min_window_hours"]),
-            int(cfg["rent_start_within_days"]),
-        ),
-    ).fetchall()
-    by: dict[str, list[tuple[float, float]]] = {}
-    for r in rows:
-        by.setdefault(r["accelerator"], []).append((r["bid"], r["ask"]))
-    if not by:
-        return []
-    src = source_id(s.t("stack", "sfcompute", "source_url"))
-    out = []
-    for acc, xs in sorted(by.items()):
-        bid = statistics.median(b for b, _ in xs)
-        ask = statistics.median(a for _, a in xs)
-        mid = statistics.median((b + a) / 2 for b, a in xs)
-        lo, hi = min(bid, mid, ask), max(bid, mid, ask)
-        out.append(
-            Quantity(
-                f"{acc}.rent_traded",
-                "usd_per_gpu_hour",
-                day,
-                day,
-                Range(lo, min(max(mid, lo), hi), hi),
-                "reported",
-                "sfcompute",
-                source=src,
-                note=f"{len(xs)} quotes",
-            )  # fmt: skip
-        )
-    return out
+def rents(s: Settings, series: Series, day: date) -> list[Quantity]:
+    """`<sku>.rent_traded` for `day` from the stored Ornn index (private)."""
+    cfg = s.t("stack", "ornn")
+    return ornn.rent_ranges(
+        series, list(cfg["gpus"]), day, int(cfg["range_days"]), ornn.ornn_source(cfg["source_url"]).id
+    )
 
 
 def closes(conn, coins: list[str], day: date) -> dict[str, tuple[date, float]]:
@@ -456,6 +425,7 @@ def compare(conn, c: Comparison, series: Series, day: date, stack: Stack) -> tup
              "kind": q.kind, "period": str(q.period_end), "source": _src_url(conn, q.source, stack),
              "method": q.method, "inputs": list(q.inputs)}
         )  # fmt: skip
+    private = any(series.asof(k, day).private for k in c.inputs.values())
     assumptions = {k: r for k, (r, _) in c.assumptions.items()}
     try:
         res = conv_mod.run(conv, inputs, assumptions)
@@ -467,6 +437,7 @@ def compare(conn, c: Comparison, series: Series, day: date, stack: Stack) -> tup
         "label": c.label,
         "unit": conv.unit,
         "conversion": conv.id,
+        "private": private,
         "model": res.model,
         "market": res.market,
         "detail": {
@@ -478,7 +449,8 @@ def compare(conn, c: Comparison, series: Series, day: date, stack: Stack) -> tup
             ],
             "sensitivity": res.sensitivity,
             "model_from": [k for role, k in c.inputs.items() if role in _model_roles(conv)],
-            "caveat": "Market prices from Hyperliquid, one venue; not the whole market. Estimates are ranges.",
+            "caveat": "Market prices from Hyperliquid, one venue; not the whole market. Estimates are ranges."
+            + (PRIVATE_NOTE if private else ""),
         },
     }, None
 
@@ -524,24 +496,22 @@ def _run(conn, s: Settings, files: Files, day: date, store: bool, stale_days: in
             "insert into model_runs (day, config_hash) values (%s, %s) returning id", (day, files.hash)
         ).fetchone()["id"]
         register(conn, files)
-        conn.execute(
-            "insert into sources (id, url, title, publisher) values (%s, %s, %s, %s) on conflict (id) do nothing",
-            (source_id(s.t("stack", "sfcompute", "source_url")), s.t("stack", "sfcompute", "source_url"),
-             "SF Compute public order book", "SF Compute"),
-        )  # fmt: skip
+        put_sources(conn, [ornn.ornn_source(s.t("stack", "ornn", "source_url"))])
         out["relationships_changed"] = sync_relationships(conn, files.graph)
         out["config_written"] = put_quantities(conn, stack.quantities, day, stale_days)
         gone = close_missing_config(conn, stack.quantities)
         if gone:
             out["config_closed"] = gone
         flag_stale(conn, day, stale_days)
-        rents = traded_rents(conn, s, day)
-        put_quantities(conn, rents, day, stale_days)
-        conn.commit()
         base = [q for q in current_quantities(conn) if q.origin != "model"]
+        day_rents = rents(s, Series(base), day)
+        put_quantities(conn, day_rents, day, stale_days)
+        conn.commit()
     else:
         base = [q for q in current_quantities(conn) if q.origin not in ("model", "config")]
-        base += stack.quantities + traded_rents(conn, s, day)
+        base += stack.quantities
+        day_rents = rents(s, Series(base), day)
+    base += day_rents
     series = Series(base)
     estimates, missing = evaluate(series, stack.estimates)
     out["quantities"] = len(base)
@@ -577,7 +547,7 @@ def _run(conn, s: Settings, files: Files, day: date, store: bool, stale_days: in
         {"node": r["node"], "model": [round(x, 6) for x in r["model"].as_list()],
          "market": [round(x, 6) for x in r["market"].as_list()], "unit": r["unit"],
          "distance": round(r["gap"].distance, 4), "overlap": r["gap"].overlap, "days_apart": r["gap"].days_apart,
-         "flagged": r["gap"].flagged}
+         "flagged": r["gap"].flagged, "private": r["private"]}
         for r in gap_rows
     ]  # fmt: skip
 
@@ -589,8 +559,14 @@ def _run(conn, s: Settings, files: Files, day: date, store: bool, stale_days: in
         if not o.path:
             out.setdefault("scenarios_skipped", {})[spec.id] = f"no figure for {', '.join(o.missing)}"
             continue
-        scen_rows.append((spec, o))
-    out["scenarios"] = [{"id": sp.id, "steps": len(o.path), "at_risk": o.revenue_at_risk} for sp, o in scen_rows]
+        keys = {st["key"] for st in o.path} | {
+            ln.per for ln in files.links if ln.per and ln.src in {st["key"] for st in o.path}
+        }
+        private = any((q := series.asof(k, day)) is not None and q.private for k in keys)
+        scen_rows.append((spec, o, private))
+    out["scenarios"] = [
+        {"id": sp.id, "steps": len(o.path), "at_risk": o.revenue_at_risk, "private": p} for sp, o, p in scen_rows
+    ]
 
     if store:
         assert run_id is not None
@@ -601,22 +577,23 @@ def _run(conn, s: Settings, files: Files, day: date, store: bool, stale_days: in
                 cur.execute(
                     """insert into gaps (day, node, run_id, entity, label, metric, unit, model_value, model_lo, model_hi,
                                          market_value, market_lo, market_hi, distance, overlap, days_apart, flagged,
-                                         conversion, detail)
-                       values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                                         conversion, detail, private)
+                       values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (
                         day, r["node"], run_id, r["entity"], r["label"], r["node"].split(".", 1)[1], r["unit"],
                         r["model"].mid, r["model"].lo, r["model"].hi, r["market"].mid, r["market"].lo, r["market"].hi,
                         g.distance, g.overlap, g.days_apart, g.flagged, r["conversion"], json.dumps(r["detail"]),
+                        r["private"],
                     ),
                 )  # fmt: skip
             cur.execute("delete from scenarios where day = %s", (day,))
-            for spec, o in scen_rows:
+            for spec, o, private in scen_rows:
                 cur.execute(
-                    """insert into scenarios (id, day, run_id, label, shock, path, revenue_at_risk)
-                       values (%s, %s, %s, %s, %s, %s, %s)""",
+                    """insert into scenarios (id, day, run_id, label, shock, path, revenue_at_risk, private)
+                       values (%s, %s, %s, %s, %s, %s, %s, %s)""",
                     (spec.id, day, run_id, spec.label,
                      json.dumps({"key": spec.key, "change": spec.change, "note": spec.note}),
-                     json.dumps(o.path), json.dumps(o.revenue_at_risk)),
+                     json.dumps(o.path), json.dumps(o.revenue_at_risk), private),
                 )  # fmt: skip
         out["forecasts"] = sync_forecasts(conn, files.forecasts)
         conn.execute(
@@ -636,11 +613,12 @@ def _run(conn, s: Settings, files: Files, day: date, store: bool, stale_days: in
             Telegram(s.env).message(
                 "Stack Engine: new persistent gaps\n"
                 + "\n".join(
+                    f"{'[PRIVATE, not for publication] ' if r['private'] else ''}"
                     f"{r['label']}: market {r['market'].mid:,.4g} vs model {r['model'].mid:,.4g} {r['unit']} "
                     f"({r['gap'].distance * 100:+.0f}%, {r['gap'].days_apart} days apart)"
                     for r in fresh
                 )
-                + f"\n{s.env.site_url}/gaps"
+                + (f"\n{s.env.site_url}/gaps" if any(not r["private"] for r in fresh) else "")
             )
     return out
 
@@ -682,7 +660,7 @@ def sync_forecasts(conn, fs: list[Forecast]) -> dict:
     for r in conn.execute(
         """select f.id, f.value, f.lo, f.hi, q.value as actual, q.source, q.kind from forecasts f
            join quantities q on q.key = f.key and q.period_start = f.period_start and q.period_end = f.period_end
-                and q.valid_to is null and q.kind <> 'estimate'
+                and q.valid_to is null and q.kind <> 'estimate' and not q.private
            where f.scored_at is null"""
     ).fetchall():
         sc = ledger.score(r["value"], r["lo"], r["hi"], r["actual"])

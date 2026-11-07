@@ -11,6 +11,7 @@ create table sources (
   title text,
   publisher text,
   published date,
+  internal boolean not null default false,    -- licensed for internal use only: nothing derived from it is published
   retrieved_at timestamptz not null default now()
 );
 
@@ -52,6 +53,7 @@ create table quantities (
   verified_at date,                           -- config rows: the last check against the source
   stale boolean not null default false,       -- not re-checked within stack.stale_days
   note text,                                  -- e.g. the XBRL concept, or how a quarter was derived
+  private boolean not null default false,     -- from an internal-only source, or computed from such a figure
   check (lo <= value and value <= hi),
   unique (key, period_start, period_end, version)
 );
@@ -117,6 +119,7 @@ create table gaps (
   flagged boolean not null,                   -- days_apart >= stack.gap_persist_days
   conversion text not null,                   -- the formula's id (tape/model/conversions.py)
   detail jsonb not null,                      -- formula, inputs with sources, assumptions, sensitivity
+  private boolean not null default false,     -- an input is private: for the operator, never the site
   primary key (day, node)
 );
 create index gaps_node on gaps (node, day);
@@ -130,6 +133,7 @@ create table scenarios (
   shock jsonb not null,                       -- {key, change, note}
   path jsonb not null,                        -- [{key, label, unit, base: [lo, mid, hi], shocked: [lo, mid, hi], via}]
   revenue_at_risk jsonb not null,             -- [{entity, name, lo, mid, hi, via}]
+  private boolean not null default false,     -- a figure on the path is private
   primary key (id, day)
 );
 
@@ -155,35 +159,3 @@ create table forecasts (
   within boolean,                             -- lo <= actual <= hi
   scored_at timestamptz
 );
-
--- SF Compute's order book, hourly: best bid and ask per accelerator, SKU and
--- delivery window, in dollars per GPU-hour (node-hour / gpus_per_node).
-create table rent_quotes (
-  time timestamptz not null,                  -- collection time, to the minute
-  accelerator text not null,                  -- h100 | h200 | b200 ...
-  sku text not null,
-  start_at timestamptz not null,
-  end_at timestamptz not null,
-  hours double precision not null,
-  bid double precision,
-  ask double precision,
-  bid_nodes int,
-  ask_nodes int,
-  bids int,
-  asks int,
-  primary key (time, accelerator, sku, start_at, end_at)
-);
-create index rent_quotes_acc_time on rent_quotes (accelerator, time);
-
--- Executions, from /fills for each window the collector saw.
-create table rent_fills (
-  accelerator text not null,
-  sku text not null,
-  start_at timestamptz not null,
-  end_at timestamptz not null,
-  filled_at timestamptz not null,
-  price double precision not null,            -- dollars per GPU-hour
-  nodes int not null,
-  primary key (accelerator, sku, start_at, end_at, filled_at, price, nodes)
-);
-create index rent_fills_acc_filled on rent_fills (accelerator, filled_at);

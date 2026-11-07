@@ -15,7 +15,7 @@ differs from the doc.
 
 **Stack Engine** (working title; design doc Nov 5, 2026, revised) is built on top of the tape. It keeps a sourced,
 bottom-up model of the AI supply chain (`config/stack/`, plus loaders for SEC EDGAR, Taiwan monthly revenue, Korea
-trade statistics and SF Compute's GPU order book), reconciles it with what markets price (Hyperliquid closes turned
+trade statistics and Ornn's GPU rent index), reconciles it with what markets price (Hyperliquid closes turned
 into physical terms by documented conversions), and measures the gap. The model says what is physically possible,
 the market says what is priced, and the engine measures the distance. Scenarios push one changed input through the
 quantity graph; a forecast ledger scores every published forecast. The financing graph (`config/graph.yaml`) is one
@@ -44,7 +44,7 @@ in `docs/BUILD_NOTES.md`.
 | `config/stack/` | The stack model's hand-checked part: entities, sources, figures and estimates, comparisons (conversions and their assumptions), scenario links, forecasts. Drafts load only once a person sets `verified_at` / `reviewed_at`. |
 | `tape/model/` | The stack model and reconciliation engine, pure: ranges and estimates (`core`), conversions, gaps, scenarios, the forecast ledger, the leading-indicator bench. |
 | `tape/modeljob.py` | The daily model run against Postgres: versions figures, computes estimates, gaps, scenarios, scores forecasts. |
-| `tape/loaders/` | EDGAR, Taiwan, Korea and SF Compute: figures straight from their source. |
+| `tape/loaders/` | EDGAR, Taiwan, Korea and Ornn: figures straight from their source. Ornn's licence is internal use only, so everything derived from it is private: in `tape gaps` and Telegram, never on the site. |
 | `tape/migrations/` | Schema. |
 | `site/` | The public site: home, `/m/<market>`, `/legs`, `/events`, `/stress`, `/stress/<date>`, `/map`, `/stack`, `/node/<id>`, `/gaps`, `/scenarios/<id>`, `/ledger`, `/research/<slug>` (pieces in `site/content/research/`), `/method`, `/data`, permalinks `/p/...`, PNGs `/c/...`, CSV and JSON. |
 | `deploy/` | systemd units and timers for the box, env example, install script. |
@@ -95,7 +95,8 @@ these, plus a typecheck and build of the site.
 | `tape candles [--days N]` | Backfill daily closes from `candleSnapshot` for the standing series and the model's conversions. |
 | `tape stack [--drafts]` | Validate `config/stack/`: what loads, which figures, judgments and comparisons are drafts. |
 | `tape model [--day D] [--drafts] [--dry-run]` | The daily model run: estimates, gaps, scenarios, forecast scores. `--drafts` treats drafts as verified and stores nothing. |
-| `tape load [edgar] [taiwan] [korea] [rents]` | Run loaders (default: the first three). Each skips itself while its key is unset. |
+| `tape load [edgar] [taiwan] [korea] [ornn]` | Run loaders (default: all). Each skips itself while its key is unset. |
+| `tape gaps` | The latest gaps, private ones included: the operator's view. |
 
 ## Deploy
 
@@ -120,9 +121,8 @@ Vercel functions stop after 800 s, so the worker cuts the always-on indexer into
   schedules again; only the one that lands on 16:xx ET runs, and with `stress.cadence: monthly` only on the month's
   first Sunday.
 - **`/api/model`, 01:30 UTC:** the stack model run, after the 00:00 UTC closes.
-- **`/api/load`, 06:00 UTC:** EDGAR, Taiwan and Korea loaders. Each writes only what is new, so release days need no
-  calendar.
-- **`/api/rents`, hourly at :05:** the SF Compute order book.
+- **`/api/load`, 06:00 UTC:** EDGAR, Taiwan, Korea and Ornn loaders. Each writes only what is new, so release days
+  need no calendar.
 - **Depth:** each shift also holds three `l2Book` WebSockets (full precision, 3 and 2 significant figures) and writes
   banded depth every minute and a full book every hour. Overlapping shifts write each minute once.
 - **`POST /api/task`** with `{"args": ["status"]}` runs any CLI command except `index`: `seed-leaderboard`, `metrics
@@ -131,7 +131,7 @@ Vercel functions stop after 800 s, so the worker cuts the always-on indexer into
 Every path but `/api/health` needs `Authorization: Bearer $CRON_SECRET`; Vercel Cron sends it. Worker environment:
 `CRON_SECRET`, the Neon variables (the worker uses `DATABASE_URL_UNPOOLED`, since advisory locks and COPY need a
 direct session), `SITE_URL`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; for the Stack Engine loaders,
-`SEC_USER_AGENT` (SEC requires a declared name and contact), `SFCOMPUTE_TOKEN` and `KOREA_DATA_KEY`.
+`SEC_USER_AGENT` (SEC requires a declared name and contact) and `KOREA_DATA_KEY`.
 
 ```bash
 curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" -d '{"args":["status"]}' https://tape-worker-<team>.vercel.app/api/task
@@ -145,7 +145,7 @@ copies `deploy/tape.env.example` to `/etc/tape/tape.env` (fill it in and re-run)
   post-sweep run.
 - `tape-daily.timer`: 16:00 America/New_York, every day.
 - `tape-stress.timer`: the first Sunday of the month, 16:30 America/New_York.
-- `tape-model.timer` (01:30 UTC), `tape-load.timer` (06:00 UTC), `tape-rents.timer` (hourly at :05).
+- `tape-model.timer` (01:30 UTC), `tape-load.timer` (06:00 UTC).
 
 **Database:** `tape-db`, a Neon database created from Vercel Storage and attached to both projects, so Vercel sets
 its connection variables and bills it. It is separate from OpenMarket's databases. The worker (or box) uses the direct

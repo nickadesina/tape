@@ -1,6 +1,6 @@
 """Loaders: figures straight from their source into `quantities` (EDGAR,
-Taiwan, Korea) and the SF Compute order book into `rent_quotes`. Each module
-has a pure parser and a `load(s)` that fetches and stores."""
+Taiwan, Korea, Ornn). Each module has a pure parser and a `load(s)` that
+fetches and stores."""
 
 
 def record_run(conn, job: str, key: str, ok: bool, note: str) -> None:

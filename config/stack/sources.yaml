@@ -12,10 +12,14 @@ sources:
     url: https://www.nvidia.com/en-us/data-center/dgx-h100/
     title: NVIDIA DGX H100 system specifications
     publisher: NVIDIA
-  sfcompute_orderbook:
-    url: https://docs.sfcompute.com/preview/orderbook.md
-    title: SF Compute public order book
-    publisher: SF Compute
+  # internal: true marks a source licensed for internal use only. Every figure
+  # from it, and everything computed from such a figure, is private: it feeds
+  # the model and the operator's alerts, never the site.
+  ornn_ocpi:
+    url: https://data.ornn.com/
+    title: Ornn Compute Price Index (OCPI)
+    publisher: Ornn
+    internal: true
   trade_xyz_preipo:
     url: https://docs.trade.xyz/perpetuals/specifications-and-schedules/pre-ipo-specification-index.md
     title: trade.xyz pre-IPO specification index

@@ -149,11 +149,10 @@ stack:
       shares_diluted: {type: duration, unit: shares, xbrl_unit: shares, additive: false, concepts: [WeightedAverageNumberOfDilutedSharesOutstanding]}
   korea:
     hs: ["8542"]                 # integrated circuits; 854232 is memories
-  sfcompute:
-    source_url: https://docs.sfcompute.com/preview/orderbook.md
-    accelerators: [h100, h200, b200]
-    gpus_per_node: 8             # the book prices nodes of 8 GPUs
-    horizon_days: 90             # windows collected: delivery starting within this
-    rent_start_within_days: 14   # traded rent: windows starting within two weeks (the spot end)
-    min_window_hours: 24
-    rent_window_days: 7          # traded rent: median of the last week's quotes
+  ornn:
+    # GPU rents: the Ornn Compute Price Index, free tier (trailing 3 months, daily).
+    # Licensed for internal use only: everything derived from it is private.
+    source_url: https://data.ornn.com/
+    gpus: {h100: "H100 SXM", h200: "H200", b200: "B200"}
+    history_days: 90             # the free tier's window; asked for in full each day
+    range_days: 7                # rent range: the trailing week's low and high around the day's value

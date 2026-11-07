@@ -257,7 +257,7 @@ order. Everything above this section still runs; the stress test is now a monthl
 ### Tables and the model's files
 
 Migration 005 adds the doc's eight tables (`entities`, `quantities`, `relationships`, `sources`, `model_runs`, `gaps`,
-`scenarios`, `forecasts`) and two for SF Compute (`rent_quotes`, `rent_fills`). Market-implied values have no table of
+`scenarios`, `forecasts`). Market-implied values have no table of
 their own: each `gaps` row carries both ranges and, in `detail`, the formula, every input with its source, the
 assumptions and the sensitivity, which is what the exhibit prints.
 
@@ -312,24 +312,32 @@ gain of at least 0.02 over the baseline: a hair above zero is noise.
   Not run: the portal refused every connection from the build environment, so the request and field names follow the
   published spec and the parser fails loudly, naming the fields it got, if they differ. The ten-day releases are
   press releases, not an API.
-- **SF Compute** (`tape load rents`, hourly): every delivery window over 90 days per accelerator (H100, H200, B200)
-  and the fills in windows starting within 14 days, per GPU-hour (node prices / 8). The endpoints are confirmed at
-  `api.sfcompute.com/preview/v2/orderbook/*` and answer "missing authentication token" without one, so the parser is
-  tested against the documented responses only. `h100.rent_traded` for a day is the median best bid, mid and ask of
-  the last week's quotes for windows of 24 h or more starting within two weeks: the spot end of the curve.
+- **GPU rents: Ornn** (`tape load ornn`, daily). The first build collected SF Compute's order book; it needed a
+  token and read one small venue, so it was replaced by the Ornn Compute Price Index (OCPI): a volume-weighted,
+  winsorized mean of executed on-demand rentals per GPU-hour, whose free tier needs no key and serves three months
+  of daily values. The loader asks for that whole window daily (H100, H200, B200), stored as `<sku>.rent_index` and
+  dated by the US Eastern day of the stamp; live on 2026-11-07 it wrote 267 values through 2026-11-05. The model
+  run's `<sku>.rent_traded` is the day's value with the trailing week's low and high as its range.
+- **Ornn's licence makes everything from it private.** Its terms license the data for internal use only and bar
+  publishing it, or anything derived from it, without a written agreement (data.ornn.com/terms, sections 2, 3 and
+  6). So sources carry `internal` (sources.yaml, `internal: true`), and a figure from an internal source, every
+  estimate computed from one, and every gap or scenario reading one is marked `private`. Private rows feed the model,
+  `tape gaps` and the operator's Telegram alerts (tagged "PRIVATE, not for publication"); every site query filters
+  them out, and forecasts are never scored against them. Checked: with 267 private figures and a private gap stored,
+  no page showed any of them. The CoreWeave gap is private for this reason, and nothing derived from Ornn is written
+  into this repo either. Publishing it needs Ornn's written consent, or a rent source that may be published.
 - **Interconnection queues:** not built. They belong to the plan's second phase (power), and each ISO publishes in
   its own format.
 
 ### The first gap, and what it waits for
 
-The CoreWeave comparison (`coreweave.rent_util`) runs end to end in tests and, on real data with drafts, everything
-but the rent: on the 2026-11-04 close of xyz:CRWV ($48.48), 551M diluted shares and $30.0B net debt (filed), and
+The CoreWeave comparison (`coreweave.rent_util`) runs end to end, in tests and on real data with drafts. Its public
+half, from Hyperliquid and EDGAR: on the 2026-11-04 close of xyz:CRWV ($48.48), 551M diluted shares and $30.0B net debt (filed), and
 600k–1M GPUs (1.5 GW active power from the Q2 release over a draft 1.5–2.5 kW per GPU), the price implies
-$0.54–1.80 of rent × utilization per GPU-hour (middle $0.96) at a starting 6–12× EV/revenue. It waits on:
-
-1. `SFCOMPUTE_TOKEN`, for traded rents (the open question in the doc).
-2. A person verifying the two drafted CoreWeave figures and the power-per-GPU judgment, and reviewing the
-   comparison's assumptions (`tape stack --drafts` lists all four).
+$0.54–1.80 of rent × utilization per GPU-hour (middle $0.96) at a starting 6–12× EV/revenue. The rent half comes
+from Ornn, so the gap is private (above). Storing it daily waits on a person verifying the two drafted CoreWeave
+figures and the power-per-GPU judgment, and reviewing the comparison's assumptions (`tape stack --drafts` lists all
+four).
 
 ### The stress test goes monthly
 

@@ -12,8 +12,7 @@ every path but /api/health requires it.
   GET  /api/daily[?force=1] the 16:00 ET post
   GET  /api/stress[?force=1] the stress test (first Sunday of the month, 16:xx ET)
   GET  /api/model[?force=1]  the daily stack model run
-  GET  /api/load            EDGAR, Taiwan and Korea loaders
-  GET  /api/rents           the SF Compute order book
+  GET  /api/load            EDGAR, Taiwan, Korea and Ornn loaders
   POST /api/task            {"args": ["status"]}: run a CLI command
 """
 
@@ -105,8 +104,6 @@ async def app(scope, receive, send):
             out = await asyncio.to_thread(modeljob.daily_job, s, query.get("force") == "1")
         elif path == "/api/load":
             out = await asyncio.to_thread(worker.load_job, s)
-        elif path == "/api/rents":
-            out = await asyncio.to_thread(worker.rents_job, s)
         elif path == "/api/task" and scope["method"] == "POST":
             args = json.loads(await _body(receive) or b"{}").get("args") or []
             out = await asyncio.to_thread(worker.task, [str(a) for a in args])

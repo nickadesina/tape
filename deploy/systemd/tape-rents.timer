@@ -1,9 +1,0 @@
-[Unit]
-Description=Collect the SF Compute order book hourly at :05
-
-[Timer]
-OnCalendar=*-*-* *:05:00
-Persistent=false
-
-[Install]
-WantedBy=timers.target

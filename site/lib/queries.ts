@@ -360,6 +360,9 @@ export async function entity(id: string): Promise<Entity | null> {
   return (r[0] as unknown as Entity) ?? null;
 }
 
+// Rows marked private (computed from a source licensed for internal use only, such as Ornn's GPU index)
+// never reach the site: every query on quantities, gaps and scenarios filters them out.
+
 // Each input key with the entity that carries it, so an estimate can link what it was computed from.
 const quantityColumns = () => sql`
   q.id::text as id, q.key, q.entity, q.metric, q.unit,
@@ -378,7 +381,7 @@ export async function currentQuantities(entityId?: string): Promise<Quantity[]> 
     select * from (
       select distinct on (q.key) ${quantityColumns()}
       from quantities q left join sources s on s.id = q.source
-      where q.valid_to is null ${entityId ? sql`and q.entity = ${entityId}` : sql``}
+      where q.valid_to is null and not q.private ${entityId ? sql`and q.entity = ${entityId}` : sql``}
       order by q.key, q.period_end desc, q.period_start desc
     ) x order by entity, key`;
   return r as unknown as Quantity[];
@@ -389,7 +392,7 @@ export async function quantityHistory(entityId: string): Promise<Quantity[]> {
   const r = await sql`
     select ${quantityColumns()}
     from quantities q left join sources s on s.id = q.source
-    where q.entity = ${entityId}
+    where q.entity = ${entityId} and not q.private
     order by q.key, q.period_end desc, q.period_start desc, q.version desc`;
   return r as unknown as Quantity[];
 }
@@ -421,7 +424,7 @@ export async function quantityRevisions(limit = 1000): Promise<Revision[]> {
     from quantities q
     left join quantities p on p.key = q.key and p.period_start = q.period_start
       and p.period_end = q.period_end and p.version = q.version - 1
-    where q.version > 1
+    where q.version > 1 and not q.private
     order by q.valid_from desc, q.key limit ${limit}`;
   return r as unknown as Revision[];
 }
@@ -477,7 +480,7 @@ const gapColumns = () => sql`
 export async function latestGaps(): Promise<Gap[]> {
   const r = await sql`
     select ${gapColumns()}, metric, conversion, detail from gaps
-    where day = (select max(day) from gaps)
+    where not private and day = (select max(day) from gaps where not private)
     order by flagged desc, abs(distance) desc, node`;
   return r as unknown as Gap[];
 }
@@ -486,7 +489,7 @@ export async function latestGaps(): Promise<Gap[]> {
 export async function gapHistory(days = 90, entityId?: string): Promise<GapPoint[]> {
   const r = await sql`
     select ${gapColumns()} from gaps
-    where day > (select max(day) from gaps) - ${days}::int
+    where not private and day > (select max(day) from gaps where not private) - ${days}::int
       ${entityId ? sql`and entity = ${entityId}` : sql``}
     order by node, day`;
   return r as unknown as GapPoint[];
@@ -496,7 +499,7 @@ export async function gapHistory(days = 90, entityId?: string): Promise<GapPoint
 export async function entityLatestGaps(entityId: string): Promise<Gap[]> {
   const r = await sql`
     select distinct on (node) ${gapColumns()}, metric, conversion, detail from gaps
-    where entity = ${entityId} order by node, day desc`;
+    where entity = ${entityId} and not private order by node, day desc`;
   return r as unknown as Gap[];
 }
 
@@ -541,7 +544,7 @@ export async function scenarioList(): Promise<ScenarioSummary[]> {
   const r = await sql`
     select distinct on (id) id, label, to_char(day, 'YYYY-MM-DD') as day,
            (count(*) over (partition by id))::int as days
-    from scenarios order by id, day desc`;
+    from scenarios where not private order by id, day desc`;
   return r as unknown as ScenarioSummary[];
 }
 
@@ -560,10 +563,11 @@ export async function scenario(id: string, day?: string): Promise<{ scenario: Sc
   if (day && !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
   const r = await sql`
     select id, to_char(day, 'YYYY-MM-DD') as day, label, shock, path, revenue_at_risk from scenarios
-    where id = ${id} ${day ? sql`and day = ${day}::date` : sql``}
+    where id = ${id} and not private ${day ? sql`and day = ${day}::date` : sql``}
     order by day desc limit 1`;
   if (!r[0]) return null;
-  const d = await sql`select to_char(day, 'YYYY-MM-DD') as day from scenarios where id = ${id} order by day desc`;
+  const d = await sql`
+    select to_char(day, 'YYYY-MM-DD') as day from scenarios where id = ${id} and not private order by day desc`;
   return { scenario: r[0] as unknown as Scenario, days: d.map((x) => x.day as string) };
 }
 

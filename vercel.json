@@ -38,10 +38,6 @@
     {
       "path": "/api/load",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/rents",
-      "schedule": "5 * * * *"
     }
   ]
 }
